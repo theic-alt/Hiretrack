@@ -1,0 +1,49 @@
+CREATE TABLE IF NOT EXISTS users (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  email TEXT NOT NULL UNIQUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS job_applications (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  company_name TEXT NOT NULL,
+  job_title TEXT NOT NULL,
+  job_url TEXT,
+  location TEXT,
+  status TEXT NOT NULL DEFAULT 'saved' CHECK (
+    status IN ('saved', 'applied', 'interviewing', 'offer', 'accepted', 'rejected', 'withdrawn')
+  ),
+  applied_at DATE,
+  notes TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS interviews (
+  id SERIAL PRIMARY KEY,
+  application_id INTEGER NOT NULL REFERENCES job_applications(id) ON DELETE CASCADE,
+  round_name TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'scheduled' CHECK (
+    status IN ('scheduled', 'completed', 'cancelled', 'rescheduled')
+  ),
+  type TEXT NOT NULL DEFAULT 'other' CHECK (
+    type IN ('phone', 'video', 'onsite', 'take_home', 'other')
+  ),
+  scheduled_at TIMESTAMPTZ,
+  duration_minutes INTEGER,
+  location TEXT,
+  meeting_url TEXT,
+  interviewer_name TEXT,
+  interviewer_email TEXT,
+  notes TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS job_applications_user_updated_idx
+  ON job_applications (user_id, updated_at DESC);
+
+CREATE INDEX IF NOT EXISTS interviews_application_idx
+  ON interviews (application_id);

@@ -1,0 +1,237 @@
+We are building HireTrack, a job application and interview management platform.
+
+The initial React + Vite frontend and Express backend foundation already exists and is working. Now build the project completely through Day 4 of our development plan.
+
+IMPORTANT:
+- Do not rebuild the existing foundation from scratch.
+- Do not introduce pnpm, monorepos, workspaces, @workspace packages, or Replit-specific authentication.
+- Use npm only.
+- Keep the existing simple client/server structure.
+- Keep everything Windows-compatible.
+- Do not add unnecessary libraries or architecture.
+- Make the application actually functional, not just mock UI.
+- Use PostgreSQL for persistent data. Use a simple, maintainable database setup compatible with Replit.
+- Keep the code understandable for a beginner developer who will explain it in interviews.
+- Before finishing, run/build/test the application and fix errors.
+
+PROJECT:
+HireTrack is a job application and interview management platform.
+
+DAY 1 — FOUNDATION AND DATA MODEL
+
+Create the database structure for:
+
+1. users
+- id
+- name
+- email
+- createdAt
+
+2. job_applications
+- id
+- userId
+- companyName
+- jobTitle
+- jobUrl
+- location
+- status
+- appliedAt
+- notes
+- createdAt
+- updatedAt
+
+Application status must support:
+- saved
+- applied
+- interviewing
+- offer
+- accepted
+- rejected
+- withdrawn
+
+3. interviews
+- id
+- applicationId
+- roundName
+- status
+- type
+- scheduledAt
+- durationMinutes
+- location
+- meetingUrl
+- interviewerName
+- interviewerEmail
+- notes
+- createdAt
+- updatedAt
+
+Interview status:
+- scheduled
+- completed
+- cancelled
+- rescheduled
+
+Interview type:
+- phone
+- video
+- onsite
+- take_home
+- other
+
+Use proper primary keys and foreign keys.
+
+For now, create a simple development user automatically if necessary so the application can be tested without building a complicated authentication system. Structure the code so real authentication can be added later.
+
+DAY 2 — JOB APPLICATION BACKEND
+
+Create a REST API for job applications.
+
+Required endpoints:
+
+GET /api/health
+
+GET /api/applications
+- Return the current user's applications.
+- Sort newest/most recently updated first.
+
+GET /api/applications/:id
+- Return one application.
+
+POST /api/applications
+- Create an application.
+- Validate required fields.
+- companyName and jobTitle are required.
+- status must be one of the supported statuses.
+
+PATCH /api/applications/:id
+- Update an application.
+- Validate the data.
+
+DELETE /api/applications/:id
+- Delete an application.
+
+Use proper HTTP status codes:
+- 200 for successful GET/PATCH
+- 201 for successful POST
+- 204 for successful DELETE
+- 400 for invalid input
+- 404 when the application doesn't exist
+- 500 for unexpected server errors
+
+Keep database queries on the server.
+Do not allow the frontend to directly access the database.
+
+DAY 3 — DASHBOARD
+
+Build a proper HireTrack dashboard in React.
+
+The dashboard should have:
+
+- HireTrack title/header
+- "Applications" heading
+- Total applications count
+- Counts for useful statuses such as Applied, Interviewing, Offers and Rejected
+- Application list/cards/table
+- Empty state when there are no applications
+- Loading state
+- Error state
+- Refresh/retry capability
+
+Each application should visibly show:
+- Company
+- Job title
+- Location if available
+- Status
+- Applied date if available
+- Notes if available
+
+Use clean, professional styling suitable for a portfolio project.
+
+Connect the React frontend to the Express API.
+Do not hardcode application data.
+
+When the dashboard loads, it must fetch:
+GET /api/applications
+
+DAY 4 — ADD / EDIT / DELETE APPLICATIONS
+
+Implement complete CRUD functionality in the frontend.
+
+ADD APPLICATION:
+Create an "Add Application" button.
+
+Open a form/dialog containing:
+- Company Name *
+- Job Title *
+- Location
+- Job URL
+- Status
+- Applied Date
+- Notes
+
+On submission:
+- Validate the form.
+- Send POST /api/applications.
+- Show a success message.
+- Close/reset the form.
+- Refresh the application list.
+- Display the newly created application.
+
+EDIT APPLICATION:
+Each application must have an Edit action.
+
+Clicking Edit should open a form populated with the existing data.
+
+Submitting it must:
+- Send PATCH /api/applications/:id
+- Update the database
+- Refresh the dashboard
+- Show a success message
+
+DELETE APPLICATION:
+Each application must have a Delete action.
+
+Before deleting, show a confirmation.
+
+On confirmation:
+- Send DELETE /api/applications/:id
+- Remove it from the database
+- Refresh/update the dashboard
+- Show a success message
+
+IMPORTANT UX:
+- Disable submit buttons while requests are running.
+- Show useful error messages if API requests fail.
+- Do not silently fail.
+- Forms should not reload the page.
+- Make the UI responsive and clean.
+
+API ERROR HANDLING:
+Make sure the frontend displays the actual useful error returned by the backend instead of always showing a generic error.
+
+FINAL VERIFICATION:
+
+Before finishing:
+1. Run the backend.
+2. Run the frontend.
+3. Verify GET /api/health works.
+4. Verify GET /api/applications works.
+5. Create an application through the UI.
+6. Verify it is stored in PostgreSQL.
+7. Verify it appears after refreshing the page.
+8. Edit the application.
+9. Verify the changes persist.
+10. Delete the application.
+11. Verify it disappears.
+12. Check for TypeScript/JavaScript/build errors.
+13. Fix any errors you find.
+
+Do not stop at creating files. The final result must be a working HireTrack application through Day 4.
+
+When finished, give me:
+1. A concise list of files created/modified.
+2. A concise explanation of the architecture.
+3. The API endpoints created.
+4. How the database is structured.
+5. How to run the project.
+6. What you tested successfully.
