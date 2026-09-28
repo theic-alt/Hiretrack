@@ -1,0 +1,123 @@
+Implement the next HireTrack feature: Resume Management.
+
+IMPORTANT:
+- Do NOT redesign the existing dashboard.
+- Do NOT modify or break existing application CRUD.
+- Do NOT modify or break existing interview CRUD.
+- Do NOT add unnecessary dependencies.
+- Preserve the current React + Express + PostgreSQL architecture.
+- First inspect the existing project structure and database before making changes.
+- Make the feature fully functional and test it before finishing.
+
+FEATURE REQUIREMENTS
+
+1. DATABASE
+Add a `resumes` table if one does not already exist.
+
+Fields:
+- id
+- user_id
+- name
+- original_filename
+- file_path
+- mime_type
+- file_size
+- is_default
+- created_at
+- updated_at
+
+The resume must belong to the current development user.
+
+Add the appropriate foreign key and indexes.
+
+2. BACKEND API
+
+Add these endpoints:
+
+GET /api/resumes
+- Return all resumes belonging to the current user.
+- Never return resumes belonging to another user.
+
+POST /api/resumes
+- Accept a PDF resume upload.
+- Store the file safely.
+- Save its metadata in PostgreSQL.
+- Allow the user to provide a resume name.
+- Return the created resume.
+
+PATCH /api/resumes/:id
+- Update the resume name.
+- Allow setting/unsetting the default resume.
+- Verify ownership.
+
+DELETE /api/resumes/:id
+- Delete the database record and associated uploaded file.
+- Verify ownership.
+- Return 204 on success.
+
+GET /api/resumes/:id/download
+- Download the resume file.
+- Verify ownership before serving it.
+
+Validation:
+- Accept PDF files only for now.
+- Reject invalid file types.
+- Reject excessively large files (use a reasonable limit such as 5 MB).
+- Never trust a client-provided user_id.
+- Return clear HTTP error responses.
+
+3. FRONTEND
+
+Add a "Resumes" section to the existing HireTrack dashboard without redesigning the current application layout.
+
+The section should allow the user to:
+
+- See uploaded resumes
+- Upload a new PDF resume
+- Enter a resume name
+- See filename and upload date
+- See which resume is the default
+- Set a resume as default
+- Rename a resume
+- Download a resume
+- Delete a resume
+
+Use the existing styling/components where possible.
+
+4. UX
+
+Add:
+- Upload Resume button
+- Upload form/modal
+- Loading state
+- Empty state when no resumes exist
+- Success message after upload/update/delete
+- Error message when upload fails
+- Confirmation before deleting a resume
+
+5. APPLICATION INTEGRATION
+
+Do NOT change existing application CRUD.
+
+If the current application form already has a resume field, connect it to the user's uploaded resumes.
+
+If it does not currently have one, add a simple optional "Resume used" dropdown to the Add/Edit Application form using the uploaded resumes.
+
+6. TESTING
+
+After implementation:
+
+- Run backend syntax/type checks.
+- Run frontend production build.
+- Test resume upload.
+- Test resume list.
+- Test rename.
+- Test set-default.
+- Test download.
+- Test delete.
+- Test invalid file rejection.
+- Confirm existing application CRUD still works.
+- Confirm existing interview CRUD still works.
+- Remove any temporary test resume files/records after testing.
+
+Do not stop at creating files. Make sure the feature actually works in the Replit preview.

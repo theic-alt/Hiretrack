@@ -49,3 +49,12 @@ The backend exposes:
 - `POST /api/applications/:applicationId/interviews`
 - `PATCH /api/interviews/:id`
 - `DELETE /api/interviews/:id`
+- `GET /api/resumes`
+- `POST /api/resumes`
+- `PATCH /api/resumes/:id`
+- `DELETE /api/resumes/:id`
+- `GET /api/resumes/:id/download`
+
+Resume uploads accept PDF files up to 5 MB. Uploaded files are stored in the
+gitignored `uploads/resumes/` directory and are only served through the
+ownership-checked download endpoint.

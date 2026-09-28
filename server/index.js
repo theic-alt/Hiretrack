@@ -1,6 +1,7 @@
 const express = require("express");
 const { query } = require("./db");
 const { registerInterviewRoutes } = require("./interview-routes");
+const { registerResumeRoutes } = require("./resume-routes");
 
 const app = express();
 const port = Number(process.env.PORT) || 3001;
@@ -24,6 +25,7 @@ const applicationColumns = {
   status: "status",
   appliedAt: "applied_at",
   notes: "notes",
+  resumeId: "resume_id",
 };
 
 app.use(express.json());
@@ -47,6 +49,14 @@ async function getDevelopmentUser() {
   return result.rows[0].id;
 }
 
+async function resumeBelongsToUser(queryFunction, resumeId, userId) {
+  const result = await queryFunction(
+    "SELECT id FROM resumes WHERE id = $1 AND user_id = $2",
+    [resumeId, userId],
+  );
+  return result.rows.length > 0;
+}
+
 function mapApplication(row) {
   return {
     id: row.id,
@@ -56,6 +66,7 @@ function mapApplication(row) {
     jobUrl: row.job_url,
     location: row.location,
     status: row.status,
+    resumeId: row.resume_id,
     appliedAt: row.applied_at
       ? row.applied_at instanceof Date
         ? row.applied_at.toISOString().slice(0, 10)
@@ -141,6 +152,18 @@ function validateApplicationInput(input, { partial = false } = {}) {
     normalized.status = status;
   }
 
+  if (!partial || Object.prototype.hasOwnProperty.call(input, "resumeId")) {
+    if (input.resumeId === undefined || input.resumeId === null || input.resumeId === "") {
+      normalized.resumeId = null;
+    } else {
+      const resumeId = Number(input.resumeId);
+      if (!Number.isInteger(resumeId) || resumeId < 1) {
+        return { error: "Resume must be a valid resume ID." };
+      }
+      normalized.resumeId = resumeId;
+    }
+  }
+
   if (!partial || Object.prototype.hasOwnProperty.call(input, "appliedAt")) {
     const appliedAt = validateDate(input.appliedAt);
     if (typeof appliedAt === "string" && appliedAt.includes("must")) {
@@ -156,7 +179,7 @@ app.get("/api/applications", async (_request, response) => {
   const userId = await getDevelopmentUser();
   const result = await query(
     `SELECT id, user_id, company_name, job_title, job_url, location, status,
-            applied_at, notes, created_at, updated_at
+            resume_id, applied_at, notes, created_at, updated_at
      FROM job_applications
      WHERE user_id = $1
      ORDER BY updated_at DESC, created_at DESC`,
@@ -176,7 +199,7 @@ app.get("/api/applications/:id", async (request, response) => {
 
   const result = await query(
     `SELECT id, user_id, company_name, job_title, job_url, location, status,
-            applied_at, notes, created_at, updated_at
+            resume_id, applied_at, notes, created_at, updated_at
      FROM job_applications
      WHERE id = $1 AND user_id = $2`,
     [applicationId, userId],
@@ -197,12 +220,18 @@ app.post("/api/applications", async (request, response) => {
 
   const userId = await getDevelopmentUser();
   const application = validation.value;
+  if (
+    application.resumeId !== null &&
+    !(await resumeBelongsToUser(query, application.resumeId, userId))
+  ) {
+    return response.status(404).json({ error: "Resume not found." });
+  }
   const result = await query(
     `INSERT INTO job_applications
-      (user_id, company_name, job_title, job_url, location, status, applied_at, notes)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      (user_id, company_name, job_title, job_url, location, status, resume_id, applied_at, notes)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      RETURNING id, user_id, company_name, job_title, job_url, location, status,
-               applied_at, notes, created_at, updated_at`,
+               resume_id, applied_at, notes, created_at, updated_at`,
     [
       userId,
       application.companyName,
@@ -210,6 +239,7 @@ app.post("/api/applications", async (request, response) => {
       application.jobUrl,
       application.location,
       application.status,
+      application.resumeId,
       application.appliedAt,
       application.notes,
     ],
@@ -236,6 +266,14 @@ app.patch("/api/applications/:id", async (request, response) => {
     return response.status(404).json({ error: "Application not found." });
   }
 
+  if (
+    Object.prototype.hasOwnProperty.call(validation.value, "resumeId") &&
+    validation.value.resumeId !== null &&
+    !(await resumeBelongsToUser(query, validation.value.resumeId, userId))
+  ) {
+    return response.status(404).json({ error: "Resume not found." });
+  }
+
   const setClauses = fields.map(
     ([field], index) => `${applicationColumns[field]} = $${index + 1}`,
   );
@@ -247,7 +285,7 @@ app.patch("/api/applications/:id", async (request, response) => {
      SET ${setClauses.join(", ")}, updated_at = NOW()
      WHERE id = $${values.length - 1} AND user_id = $${values.length}
      RETURNING id, user_id, company_name, job_title, job_url, location, status,
-               applied_at, notes, created_at, updated_at`,
+               resume_id, applied_at, notes, created_at, updated_at`,
     values,
   );
 
@@ -279,11 +317,15 @@ app.delete("/api/applications/:id", async (request, response) => {
 });
 
 registerInterviewRoutes(app, { query, getDevelopmentUser });
+registerResumeRoutes(app, { query, getDevelopmentUser });
 
 app.use((error, _request, response, _next) => {
   console.error(error);
-  response.status(error.statusCode || 500).json({
-    error: error.statusCode ? error.message : "Unexpected server error.",
+  response.status(error.statusCode || error.status || 500).json({
+    error:
+      error.statusCode || error.status
+        ? error.message
+        : "Unexpected server error.",
   });
 });
 

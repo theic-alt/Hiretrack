@@ -8,6 +8,11 @@ import {
   deleteInterview,
   getInterviews,
   updateInterview,
+  deleteResume,
+  getResumeDownloadUrl,
+  getResumes,
+  updateResume,
+  uploadResume,
 } from "./api";
 import "./index.css";
 
@@ -48,6 +53,7 @@ const emptyForm = {
   jobUrl: "",
   status: "saved",
   appliedAt: "",
+  resumeId: "",
   notes: "",
 };
 
@@ -98,8 +104,11 @@ function interviewFormFromRecord(interview) {
     return { ...emptyInterviewForm };
   }
 
-  const scheduledDate = interview.scheduledAt ? new Date(interview.scheduledAt) : null;
-  const hasScheduledDate = scheduledDate && !Number.isNaN(scheduledDate.getTime());
+  const scheduledDate = interview.scheduledAt
+    ? new Date(interview.scheduledAt)
+    : null;
+  const hasScheduledDate =
+    scheduledDate && !Number.isNaN(scheduledDate.getTime());
   const pad = (value) => String(value).padStart(2, "0");
   return {
     roundName: interview.roundName || "",
@@ -121,15 +130,18 @@ function interviewFormFromRecord(interview) {
 }
 
 function interviewPayloadFromForm(form) {
-  const scheduledDate = form.date && form.time ? new Date(`${form.date}T${form.time}`) : null;
+  const scheduledDate =
+    form.date && form.time ? new Date(`${form.date}T${form.time}`) : null;
   return {
     roundName: form.roundName,
     type: form.type,
     status: form.status,
-    scheduledAt: scheduledDate && !Number.isNaN(scheduledDate.getTime())
-      ? scheduledDate.toISOString()
-      : null,
-    durationMinutes: form.durationMinutes === "" ? null : Number(form.durationMinutes),
+    scheduledAt:
+      scheduledDate && !Number.isNaN(scheduledDate.getTime())
+        ? scheduledDate.toISOString()
+        : null,
+    durationMinutes:
+      form.durationMinutes === "" ? null : Number(form.durationMinutes),
     location: form.location,
     meetingUrl: form.meetingUrl,
     interviewerName: form.interviewerName,
@@ -139,7 +151,11 @@ function interviewPayloadFromForm(form) {
 }
 
 function StatusBadge({ status }) {
-  return <span className={`status-badge status-${status}`}>{statusLabels[status] || status}</span>;
+  return (
+    <span className={`status-badge status-${status}`}>
+      {statusLabels[status] || status}
+    </span>
+  );
 }
 
 function InterviewForm({ interview, saving, onCancel, onSubmit }) {
@@ -174,17 +190,27 @@ function InterviewForm({ interview, saving, onCancel, onSubmit }) {
       >
         <div className="modal-heading">
           <div>
-            <p className="eyebrow">{editing ? "Update interview" : "New interview"}</p>
+            <p className="eyebrow">
+              {editing ? "Update interview" : "New interview"}
+            </p>
             <h2 id="interview-form-title">
               {editing ? "Edit interview" : "Add interview"}
             </h2>
           </div>
-          <button className="icon-button" type="button" onClick={onCancel} aria-label="Close form">
+          <button
+            className="icon-button"
+            type="button"
+            onClick={onCancel}
+            aria-label="Close form"
+          >
             ×
           </button>
         </div>
 
-        <form className="application-form interview-form" onSubmit={handleSubmit}>
+        <form
+          className="application-form interview-form"
+          onSubmit={handleSubmit}
+        >
           <div className="form-grid">
             <label>
               Round Name <span>*</span>
@@ -234,11 +260,21 @@ function InterviewForm({ interview, saving, onCancel, onSubmit }) {
             </label>
             <label>
               Date
-              <input type="date" name="date" value={form.date} onChange={handleChange} />
+              <input
+                type="date"
+                name="date"
+                value={form.date}
+                onChange={handleChange}
+              />
             </label>
             <label>
               Time
-              <input type="time" name="time" value={form.time} onChange={handleChange} />
+              <input
+                type="time"
+                name="time"
+                value={form.time}
+                onChange={handleChange}
+              />
             </label>
             <label>
               Location
@@ -289,13 +325,30 @@ function InterviewForm({ interview, saving, onCancel, onSubmit }) {
               rows="4"
             />
           </label>
-          {formError && <p className="form-error" role="alert">{formError}</p>}
+          {formError && (
+            <p className="form-error" role="alert">
+              {formError}
+            </p>
+          )}
           <div className="form-actions">
-            <button className="button button-secondary" type="button" onClick={onCancel} disabled={saving}>
+            <button
+              className="button button-secondary"
+              type="button"
+              onClick={onCancel}
+              disabled={saving}
+            >
               Cancel
             </button>
-            <button className="button button-primary" type="submit" disabled={saving}>
-              {saving ? "Saving..." : editing ? "Save changes" : "Add interview"}
+            <button
+              className="button button-primary"
+              type="submit"
+              disabled={saving}
+            >
+              {saving
+                ? "Saving..."
+                : editing
+                  ? "Save changes"
+                  : "Add interview"}
             </button>
           </div>
         </form>
@@ -310,17 +363,22 @@ function InterviewCard({ interview, onEdit, onDelete, deleting }) {
       <div className="interview-card-heading">
         <div>
           <p className="interview-round">{interview.roundName}</p>
-          <p className="interview-type">{interviewTypeLabels[interview.type] || interview.type}</p>
+          <p className="interview-type">
+            {interviewTypeLabels[interview.type] || interview.type}
+          </p>
         </div>
-        <span className={`interview-status interview-status-${interview.status}`}>
+        <span
+          className={`interview-status interview-status-${interview.status}`}
+        >
           {interviewStatusLabels[interview.status] || interview.status}
         </span>
       </div>
       <div className="interview-meta">
         <span>{formatDateTime(interview.scheduledAt)}</span>
-        {interview.durationMinutes !== null && interview.durationMinutes !== undefined && (
-          <span>{interview.durationMinutes} min</span>
-        )}
+        {interview.durationMinutes !== null &&
+          interview.durationMinutes !== undefined && (
+            <span>{interview.durationMinutes} min</span>
+          )}
         {interview.interviewerName && <span>{interview.interviewerName}</span>}
       </div>
       <div className="interview-details">
@@ -333,7 +391,11 @@ function InterviewCard({ interview, onEdit, onDelete, deleting }) {
       </div>
       {interview.notes && <p className="interview-notes">{interview.notes}</p>}
       <div className="interview-actions">
-        <button className="text-button" type="button" onClick={() => onEdit(interview)}>
+        <button
+          className="text-button"
+          type="button"
+          onClick={() => onEdit(interview)}
+        >
           Edit
         </button>
         <button
@@ -431,9 +493,17 @@ function InterviewSection({ applicationId, onNotify }) {
       <div className="interview-section-heading">
         <div>
           <h4>Interviews</h4>
-          <span>{loading ? "Loading..." : `${interviews.length} ${interviews.length === 1 ? "round" : "rounds"}`}</span>
+          <span>
+            {loading
+              ? "Loading..."
+              : `${interviews.length} ${interviews.length === 1 ? "round" : "rounds"}`}
+          </span>
         </div>
-        <button className="interview-add-button" type="button" onClick={openAddForm}>
+        <button
+          className="interview-add-button"
+          type="button"
+          onClick={openAddForm}
+        >
           <span aria-hidden="true">+</span>
           Add interview
         </button>
@@ -442,7 +512,11 @@ function InterviewSection({ applicationId, onNotify }) {
       {error && (
         <div className="interview-error" role="alert">
           <span>{error}</span>
-          <button className="text-button" type="button" onClick={loadInterviews}>
+          <button
+            className="text-button"
+            type="button"
+            onClick={loadInterviews}
+          >
             Retry
           </button>
         </div>
@@ -478,7 +552,325 @@ function InterviewSection({ applicationId, onNotify }) {
   );
 }
 
-function ApplicationForm({ application, saving, onCancel, onSubmit }) {
+function formatFileSize(value) {
+  if (!value) {
+    return "0 KB";
+  }
+  if (value < 1024 * 1024) {
+    return `${Math.max(1, Math.round(value / 1024))} KB`;
+  }
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function ResumeForm({ resume, saving, onCancel, onSubmit }) {
+  const [name, setName] = useState(resume?.name || "");
+  const [file, setFile] = useState(null);
+  const [formError, setFormError] = useState("");
+  const editing = Boolean(resume?.id);
+
+  function handleSubmit(event) {
+    event.preventDefault();
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      setFormError("Enter a name for this resume.");
+      return;
+    }
+    if (!editing && !file) {
+      setFormError("Choose a PDF resume to upload.");
+      return;
+    }
+    if (!editing && file.type !== "application/pdf") {
+      setFormError("Only PDF resumes are accepted.");
+      return;
+    }
+    setFormError("");
+    onSubmit({ name: trimmedName, file });
+  }
+
+  return (
+    <div className="modal-backdrop" onMouseDown={onCancel}>
+      <section
+        className="modal resume-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="resume-form-title"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="modal-heading">
+          <div>
+            <p className="eyebrow">{editing ? "Update resume" : "New resume"}</p>
+            <h2 id="resume-form-title">
+              {editing ? "Rename resume" : "Upload resume"}
+            </h2>
+          </div>
+          <button
+            className="icon-button"
+            type="button"
+            onClick={onCancel}
+            aria-label="Close form"
+          >
+            ×
+          </button>
+        </div>
+
+        <form className="application-form" onSubmit={handleSubmit}>
+          <label>
+            Resume Name <span>*</span>
+            <input
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="e.g. Product design resume"
+              maxLength="120"
+              required
+              autoFocus
+            />
+          </label>
+          {!editing && (
+            <label>
+              PDF File <span>*</span>
+              <input
+                type="file"
+                accept="application/pdf,.pdf"
+                onChange={(event) => setFile(event.target.files?.[0] || null)}
+                required
+              />
+              <small className="field-help">PDF only, up to 5 MB.</small>
+            </label>
+          )}
+          {formError && (
+            <p className="form-error" role="alert">
+              {formError}
+            </p>
+          )}
+          <div className="form-actions">
+            <button
+              className="button button-secondary"
+              type="button"
+              onClick={onCancel}
+              disabled={saving}
+            >
+              Cancel
+            </button>
+            <button
+              className="button button-primary"
+              type="submit"
+              disabled={saving}
+            >
+              {saving ? "Saving..." : editing ? "Save name" : "Upload resume"}
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
+  );
+}
+
+function ResumeCard({
+  resume,
+  onEdit,
+  onSetDefault,
+  onDelete,
+  deleting,
+}) {
+  return (
+    <article className="resume-card">
+      <div className="resume-card-main">
+        <div className="resume-file-icon" aria-hidden="true">
+          PDF
+        </div>
+        <div className="resume-card-copy">
+          <div className="resume-title-row">
+            <h3>{resume.name}</h3>
+            {resume.isDefault && <span className="default-badge">Default</span>}
+          </div>
+          <p>
+            {resume.originalFilename} · {formatFileSize(resume.fileSize)}
+          </p>
+          <span>Uploaded {formatDateTime(resume.createdAt)}</span>
+        </div>
+      </div>
+      <div className="resume-actions">
+        <a
+          className="text-button"
+          href={getResumeDownloadUrl(resume.id)}
+          target="_blank"
+          rel="noreferrer"
+        >
+          Download
+        </a>
+        <button
+          className="text-button"
+          type="button"
+          onClick={() => onSetDefault(resume)}
+        >
+          {resume.isDefault ? "Unset default" : "Set default"}
+        </button>
+        <button className="text-button" type="button" onClick={() => onEdit(resume)}>
+          Rename
+        </button>
+        <button
+          className="text-button text-button-danger"
+          type="button"
+          onClick={() => onDelete(resume)}
+          disabled={deleting}
+        >
+          {deleting ? "Deleting..." : "Delete"}
+        </button>
+      </div>
+    </article>
+  );
+}
+
+function ResumeManager({
+  resumes,
+  loading,
+  error,
+  onReload,
+  onNotify,
+}) {
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingResume, setEditingResume] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
+  const [actionError, setActionError] = useState("");
+
+  function openUploadForm() {
+    setEditingResume(null);
+    setActionError("");
+    setFormOpen(true);
+  }
+
+  function openRenameForm(resume) {
+    setEditingResume(resume);
+    setActionError("");
+    setFormOpen(true);
+  }
+
+  async function handleSave(values) {
+    setSaving(true);
+    setActionError("");
+    try {
+      if (editingResume) {
+        await updateResume(editingResume.id, { name: values.name });
+        onNotify("Resume renamed successfully.");
+      } else {
+        await uploadResume(values.name, values.file);
+        onNotify("Resume uploaded successfully.");
+      }
+      setFormOpen(false);
+      setEditingResume(null);
+      await onReload();
+    } catch (requestError) {
+      setActionError(requestError.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleSetDefault(resume) {
+    setActionError("");
+    try {
+      await updateResume(resume.id, { isDefault: !resume.isDefault });
+      onNotify(resume.isDefault ? "Default resume unset." : "Default resume updated.");
+      await onReload();
+    } catch (requestError) {
+      setActionError(requestError.message);
+    }
+  }
+
+  async function handleDelete(resume) {
+    if (!window.confirm(`Delete the ${resume.name} resume?`)) {
+      return;
+    }
+
+    setDeletingId(resume.id);
+    setActionError("");
+    try {
+      await deleteResume(resume.id);
+      onNotify("Resume deleted successfully.");
+      await onReload();
+    } catch (requestError) {
+      setActionError(requestError.message);
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  const visibleError = actionError || error;
+  return (
+    <section className="resumes-section" aria-labelledby="resumes-title">
+      <div className="section-heading">
+        <div>
+          <h2 id="resumes-title">Resumes</h2>
+          <p>Keep tailored versions ready for every opportunity.</p>
+        </div>
+        <button
+          className="button button-secondary resume-upload-button"
+          type="button"
+          onClick={openUploadForm}
+        >
+          <span aria-hidden="true">+</span>
+          Upload resume
+        </button>
+      </div>
+
+      {visibleError && (
+        <div className="feedback feedback-error resume-feedback" role="alert">
+          <span>{visibleError}</span>
+          <button className="text-button" type="button" onClick={onReload}>
+            Retry
+          </button>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="resume-empty">
+          <div className="loading-spinner" />
+          <p>Loading your resumes...</p>
+        </div>
+      ) : resumes.length === 0 ? (
+        <div className="resume-empty">
+          <div className="empty-icon">▤</div>
+          <h3>No resumes uploaded yet</h3>
+          <p>Upload a PDF to reuse it across your applications.</p>
+          <button className="button button-secondary" type="button" onClick={openUploadForm}>
+            Upload your first resume
+          </button>
+        </div>
+      ) : (
+        <div className="resume-list">
+          {resumes.map((resume) => (
+            <ResumeCard
+              key={resume.id}
+              resume={resume}
+              onEdit={openRenameForm}
+              onSetDefault={handleSetDefault}
+              onDelete={handleDelete}
+              deleting={deletingId === resume.id}
+            />
+          ))}
+        </div>
+      )}
+
+      {formOpen && (
+        <ResumeForm
+          resume={editingResume}
+          saving={saving}
+          onCancel={() => setFormOpen(false)}
+          onSubmit={handleSave}
+        />
+      )}
+    </section>
+  );
+}
+
+function ApplicationForm({
+  application,
+  resumes,
+  saving,
+  onCancel,
+  onSubmit,
+}) {
   const [form, setForm] = useState(application || emptyForm);
 
   function handleChange(event) {
@@ -504,12 +896,19 @@ function ApplicationForm({ application, saving, onCancel, onSubmit }) {
       >
         <div className="modal-heading">
           <div>
-            <p className="eyebrow">{editing ? "Update record" : "New record"}</p>
+            <p className="eyebrow">
+              {editing ? "Update record" : "New record"}
+            </p>
             <h2 id="application-form-title">
               {editing ? "Edit application" : "Add application"}
             </h2>
           </div>
-          <button className="icon-button" type="button" onClick={onCancel} aria-label="Close form">
+          <button
+            className="icon-button"
+            type="button"
+            onClick={onCancel}
+            aria-label="Close form"
+          >
             ×
           </button>
         </div>
@@ -568,7 +967,28 @@ function ApplicationForm({ application, saving, onCancel, onSubmit }) {
             </label>
             <label>
               Applied Date
-              <input type="date" name="appliedAt" value={form.appliedAt || ""} onChange={handleChange} />
+              <input
+                type="date"
+                name="appliedAt"
+                value={form.appliedAt || ""}
+                onChange={handleChange}
+              />
+            </label>
+            <label>
+              Resume used
+              <select
+                name="resumeId"
+                value={form.resumeId || ""}
+                onChange={handleChange}
+              >
+                <option value="">No resume selected</option>
+                {resumes.map((resume) => (
+                  <option key={resume.id} value={resume.id}>
+                    {resume.name}
+                    {resume.isDefault ? " (Default)" : ""}
+                  </option>
+                ))}
+              </select>
             </label>
           </div>
           <label>
@@ -582,11 +1002,24 @@ function ApplicationForm({ application, saving, onCancel, onSubmit }) {
             />
           </label>
           <div className="form-actions">
-            <button className="button button-secondary" type="button" onClick={onCancel} disabled={saving}>
+            <button
+              className="button button-secondary"
+              type="button"
+              onClick={onCancel}
+              disabled={saving}
+            >
               Cancel
             </button>
-            <button className="button button-primary" type="submit" disabled={saving}>
-              {saving ? "Saving..." : editing ? "Save changes" : "Add application"}
+            <button
+              className="button button-primary"
+              type="submit"
+              disabled={saving}
+            >
+              {saving
+                ? "Saving..."
+                : editing
+                  ? "Save changes"
+                  : "Add application"}
             </button>
           </div>
         </form>
@@ -595,7 +1028,13 @@ function ApplicationForm({ application, saving, onCancel, onSubmit }) {
   );
 }
 
-function ApplicationCard({ application, onEdit, onDelete, deleting, onNotify }) {
+function ApplicationCard({
+  application,
+  onEdit,
+  onDelete,
+  deleting,
+  onNotify,
+}) {
   return (
     <article className="application-card">
       <div className="card-topline">
@@ -608,10 +1047,16 @@ function ApplicationCard({ application, onEdit, onDelete, deleting, onNotify }) 
 
       <div className="application-meta">
         <span>{application.location || "Location not set"}</span>
-        <span>{application.appliedAt ? `Applied ${formatDate(application.appliedAt)}` : "Date not set"}</span>
+        <span>
+          {application.appliedAt
+            ? `Applied ${formatDate(application.appliedAt)}`
+            : "Date not set"}
+        </span>
       </div>
 
-      {application.notes && <p className="application-notes">{application.notes}</p>}
+      {application.notes && (
+        <p className="application-notes">{application.notes}</p>
+      )}
 
       <div className="card-actions">
         {application.jobUrl && (
@@ -620,7 +1065,11 @@ function ApplicationCard({ application, onEdit, onDelete, deleting, onNotify }) 
           </a>
         )}
         <span className="action-spacer" />
-        <button className="text-button" type="button" onClick={() => onEdit(application)}>
+        <button
+          className="text-button"
+          type="button"
+          onClick={() => onEdit(application)}
+        >
           Edit
         </button>
         <button
@@ -642,6 +1091,9 @@ export default function App() {
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [resumes, setResumes] = useState([]);
+  const [resumesLoading, setResumesLoading] = useState(true);
+  const [resumesError, setResumesError] = useState("");
   const [message, setMessage] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [editingApplication, setEditingApplication] = useState(null);
@@ -662,9 +1114,23 @@ export default function App() {
     }
   }, []);
 
+  const loadResumes = useCallback(async () => {
+    setResumesLoading(true);
+    setResumesError("");
+
+    try {
+      setResumes(await getResumes());
+    } catch (requestError) {
+      setResumesError(requestError.message);
+    } finally {
+      setResumesLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadApplications();
-  }, [loadApplications]);
+    loadResumes();
+  }, [loadApplications, loadResumes]);
 
   function showToast(nextMessage) {
     setToast(nextMessage);
@@ -678,9 +1144,19 @@ export default function App() {
 
   function openEditForm(application) {
     setEditingApplication({
-      ...application,
-      appliedAt: application.appliedAt ? String(application.appliedAt).slice(0, 10) : "",
+      id: application.id,
+      companyName: application.companyName || "",
+      jobTitle: application.jobTitle || "",
+      location: application.location || "",
+      jobUrl: application.jobUrl || "",
+      status: application.status || "saved",
+      resumeId: application.resumeId ?? "",
+      appliedAt: application.appliedAt
+        ? String(application.appliedAt).slice(0, 10)
+        : "",
+      notes: application.notes || "",
     });
+
     setFormOpen(true);
   }
 
@@ -691,12 +1167,34 @@ export default function App() {
 
     try {
       if (editingApplication) {
-        await updateApplication(editingApplication.id, form);
+        const {
+          companyName,
+          jobTitle,
+          location,
+          jobUrl,
+          status,
+          resumeId,
+          appliedAt,
+          notes,
+        } = form;
+
+        await updateApplication(editingApplication.id, {
+          companyName,
+          jobTitle,
+          location,
+          jobUrl,
+          status,
+          resumeId: resumeId || null,
+          appliedAt,
+          notes,
+        });
+
         setMessage("Application updated successfully.");
       } else {
         await createApplication(form);
         setMessage("Application added successfully.");
       }
+
       setFormOpen(false);
       setEditingApplication(null);
       await loadApplications();
@@ -708,7 +1206,11 @@ export default function App() {
   }
 
   async function handleDelete(application) {
-    if (!window.confirm(`Delete the ${application.jobTitle} application at ${application.companyName}?`)) {
+    if (
+      !window.confirm(
+        `Delete the ${application.jobTitle} application at ${application.companyName}?`,
+      )
+    ) {
       return;
     }
 
@@ -727,7 +1229,8 @@ export default function App() {
     }
   }
 
-  const countFor = (status) => applications.filter((application) => application.status === status).length;
+  const countFor = (status) =>
+    applications.filter((application) => application.status === status).length;
 
   return (
     <div className="app-shell">
@@ -749,7 +1252,11 @@ export default function App() {
             <h1>Applications</h1>
             <p className="intro-copy">Keep every opportunity moving forward.</p>
           </div>
-          <button className="button button-primary add-button" type="button" onClick={openAddForm}>
+          <button
+            className="button button-primary add-button"
+            type="button"
+            onClick={openAddForm}
+          >
             <span aria-hidden="true">+</span>
             Add application
           </button>
@@ -783,6 +1290,14 @@ export default function App() {
           </div>
         </section>
 
+        <ResumeManager
+          resumes={resumes}
+          loading={resumesLoading}
+          error={resumesError}
+          onReload={loadResumes}
+          onNotify={showToast}
+        />
+
         {message && (
           <div className="feedback feedback-success" role="status">
             <span aria-hidden="true">✓</span>
@@ -792,7 +1307,11 @@ export default function App() {
         {error && (
           <div className="feedback feedback-error" role="alert">
             <span>{error}</span>
-            <button className="text-button" type="button" onClick={loadApplications}>
+            <button
+              className="text-button"
+              type="button"
+              onClick={loadApplications}
+            >
               Retry
             </button>
           </div>
@@ -804,7 +1323,12 @@ export default function App() {
               <h2>All applications</h2>
               <p>Most recently updated first</p>
             </div>
-            <button className="refresh-button" type="button" onClick={loadApplications} disabled={loading}>
+            <button
+              className="refresh-button"
+              type="button"
+              onClick={loadApplications}
+              disabled={loading}
+            >
               <span aria-hidden="true">↻</span>
               Refresh
             </button>
@@ -821,7 +1345,11 @@ export default function App() {
               <div className="empty-icon">＋</div>
               <h3>Your pipeline is clear</h3>
               <p>Add your first application to start tracking your search.</p>
-              <button className="button button-primary" type="button" onClick={openAddForm}>
+              <button
+                className="button button-primary"
+                type="button"
+                onClick={openAddForm}
+              >
                 Add your first application
               </button>
             </div>
@@ -845,6 +1373,7 @@ export default function App() {
       {formOpen && (
         <ApplicationForm
           application={editingApplication}
+          resumes={resumes}
           saving={saving}
           onCancel={() => setFormOpen(false)}
           onSubmit={handleSave}

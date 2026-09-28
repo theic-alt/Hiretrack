@@ -47,3 +47,25 @@ CREATE INDEX IF NOT EXISTS job_applications_user_updated_idx
 
 CREATE INDEX IF NOT EXISTS interviews_application_idx
   ON interviews (application_id);
+
+CREATE TABLE IF NOT EXISTS resumes (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  original_filename TEXT NOT NULL,
+  file_path TEXT NOT NULL UNIQUE,
+  mime_type TEXT NOT NULL,
+  file_size INTEGER NOT NULL CHECK (file_size > 0),
+  is_default BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE job_applications
+  ADD COLUMN IF NOT EXISTS resume_id INTEGER REFERENCES resumes(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS resumes_user_updated_idx
+  ON resumes (user_id, updated_at DESC);
+
+CREATE INDEX IF NOT EXISTS job_applications_resume_idx
+  ON job_applications (resume_id);
