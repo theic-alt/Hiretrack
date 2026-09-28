@@ -1,5 +1,6 @@
 const express = require("express");
 const { query } = require("./db");
+const { registerInterviewRoutes } = require("./interview-routes");
 
 const app = express();
 const port = Number(process.env.PORT) || 3001;
@@ -276,6 +277,8 @@ app.delete("/api/applications/:id", async (request, response) => {
 
   return response.status(204).end();
 });
+
+registerInterviewRoutes(app, { query, getDevelopmentUser });
 
 app.use((error, _request, response, _next) => {
   console.error(error);

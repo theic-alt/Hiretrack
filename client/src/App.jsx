@@ -4,6 +4,10 @@ import {
   deleteApplication,
   getApplications,
   updateApplication,
+  createInterview,
+  deleteInterview,
+  getInterviews,
+  updateInterview,
 } from "./api";
 import "./index.css";
 
@@ -19,6 +23,24 @@ const statuses = [
 
 const statusLabels = Object.fromEntries(statuses);
 
+const interviewStatuses = [
+  ["scheduled", "Scheduled"],
+  ["completed", "Completed"],
+  ["cancelled", "Cancelled"],
+  ["rescheduled", "Rescheduled"],
+];
+
+const interviewTypes = [
+  ["phone", "Phone"],
+  ["video", "Video"],
+  ["onsite", "Onsite"],
+  ["take_home", "Take-home"],
+  ["other", "Other"],
+];
+
+const interviewStatusLabels = Object.fromEntries(interviewStatuses);
+const interviewTypeLabels = Object.fromEntries(interviewTypes);
+
 const emptyForm = {
   companyName: "",
   jobTitle: "",
@@ -26,6 +48,20 @@ const emptyForm = {
   jobUrl: "",
   status: "saved",
   appliedAt: "",
+  notes: "",
+};
+
+const emptyInterviewForm = {
+  roundName: "",
+  type: "video",
+  status: "scheduled",
+  date: "",
+  time: "",
+  durationMinutes: "",
+  location: "",
+  meetingUrl: "",
+  interviewerName: "",
+  interviewerEmail: "",
   notes: "",
 };
 
@@ -43,8 +79,403 @@ function formatDate(value) {
   }).format(new Date(dateValue));
 }
 
+function formatDateTime(value) {
+  if (!value) {
+    return "Date and time not set";
+  }
+
+  return new Intl.DateTimeFormat("en", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
+function interviewFormFromRecord(interview) {
+  if (!interview) {
+    return { ...emptyInterviewForm };
+  }
+
+  const scheduledDate = interview.scheduledAt ? new Date(interview.scheduledAt) : null;
+  const hasScheduledDate = scheduledDate && !Number.isNaN(scheduledDate.getTime());
+  const pad = (value) => String(value).padStart(2, "0");
+  return {
+    roundName: interview.roundName || "",
+    type: interview.type || "other",
+    status: interview.status || "scheduled",
+    date: hasScheduledDate
+      ? `${scheduledDate.getFullYear()}-${pad(scheduledDate.getMonth() + 1)}-${pad(scheduledDate.getDate())}`
+      : "",
+    time: hasScheduledDate
+      ? `${pad(scheduledDate.getHours())}:${pad(scheduledDate.getMinutes())}`
+      : "",
+    durationMinutes: interview.durationMinutes ?? "",
+    location: interview.location || "",
+    meetingUrl: interview.meetingUrl || "",
+    interviewerName: interview.interviewerName || "",
+    interviewerEmail: interview.interviewerEmail || "",
+    notes: interview.notes || "",
+  };
+}
+
+function interviewPayloadFromForm(form) {
+  const scheduledDate = form.date && form.time ? new Date(`${form.date}T${form.time}`) : null;
+  return {
+    roundName: form.roundName,
+    type: form.type,
+    status: form.status,
+    scheduledAt: scheduledDate && !Number.isNaN(scheduledDate.getTime())
+      ? scheduledDate.toISOString()
+      : null,
+    durationMinutes: form.durationMinutes === "" ? null : Number(form.durationMinutes),
+    location: form.location,
+    meetingUrl: form.meetingUrl,
+    interviewerName: form.interviewerName,
+    interviewerEmail: form.interviewerEmail,
+    notes: form.notes,
+  };
+}
+
 function StatusBadge({ status }) {
   return <span className={`status-badge status-${status}`}>{statusLabels[status] || status}</span>;
+}
+
+function InterviewForm({ interview, saving, onCancel, onSubmit }) {
+  const [form, setForm] = useState(() => interviewFormFromRecord(interview));
+  const [formError, setFormError] = useState("");
+  const editing = Boolean(interview?.id);
+
+  function handleChange(event) {
+    const { name, value } = event.target;
+    setForm((current) => ({ ...current, [name]: value }));
+  }
+
+  function handleSubmit(event) {
+    event.preventDefault();
+    if (Boolean(form.date) !== Boolean(form.time)) {
+      setFormError("Enter both a date and time, or leave both blank.");
+      return;
+    }
+
+    setFormError("");
+    onSubmit(interviewPayloadFromForm(form));
+  }
+
+  return (
+    <div className="modal-backdrop" onMouseDown={onCancel}>
+      <section
+        className="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="interview-form-title"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="modal-heading">
+          <div>
+            <p className="eyebrow">{editing ? "Update interview" : "New interview"}</p>
+            <h2 id="interview-form-title">
+              {editing ? "Edit interview" : "Add interview"}
+            </h2>
+          </div>
+          <button className="icon-button" type="button" onClick={onCancel} aria-label="Close form">
+            ×
+          </button>
+        </div>
+
+        <form className="application-form interview-form" onSubmit={handleSubmit}>
+          <div className="form-grid">
+            <label>
+              Round Name <span>*</span>
+              <input
+                name="roundName"
+                value={form.roundName}
+                onChange={handleChange}
+                placeholder="e.g. Hiring manager"
+                required
+                autoFocus
+              />
+            </label>
+            <label>
+              Interview Type
+              <select name="type" value={form.type} onChange={handleChange}>
+                {interviewTypes.map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Status
+              <select name="status" value={form.status} onChange={handleChange}>
+                {interviewStatuses.map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Duration
+              <div className="input-with-suffix">
+                <input
+                  type="number"
+                  name="durationMinutes"
+                  value={form.durationMinutes}
+                  onChange={handleChange}
+                  min="0"
+                  max="1440"
+                  placeholder="45"
+                />
+                <span>min</span>
+              </div>
+            </label>
+            <label>
+              Date
+              <input type="date" name="date" value={form.date} onChange={handleChange} />
+            </label>
+            <label>
+              Time
+              <input type="time" name="time" value={form.time} onChange={handleChange} />
+            </label>
+            <label>
+              Location
+              <input
+                name="location"
+                value={form.location}
+                onChange={handleChange}
+                placeholder="e.g. Google Meet"
+              />
+            </label>
+            <label>
+              Meeting URL
+              <input
+                type="url"
+                name="meetingUrl"
+                value={form.meetingUrl}
+                onChange={handleChange}
+                placeholder="https://..."
+              />
+            </label>
+            <label>
+              Interviewer Name
+              <input
+                name="interviewerName"
+                value={form.interviewerName}
+                onChange={handleChange}
+                placeholder="e.g. Alex Morgan"
+              />
+            </label>
+            <label>
+              Interviewer Email
+              <input
+                type="email"
+                name="interviewerEmail"
+                value={form.interviewerEmail}
+                onChange={handleChange}
+                placeholder="alex@company.com"
+              />
+            </label>
+          </div>
+          <label>
+            Notes
+            <textarea
+              name="notes"
+              value={form.notes}
+              onChange={handleChange}
+              placeholder="Capture preparation notes or follow-ups..."
+              rows="4"
+            />
+          </label>
+          {formError && <p className="form-error" role="alert">{formError}</p>}
+          <div className="form-actions">
+            <button className="button button-secondary" type="button" onClick={onCancel} disabled={saving}>
+              Cancel
+            </button>
+            <button className="button button-primary" type="submit" disabled={saving}>
+              {saving ? "Saving..." : editing ? "Save changes" : "Add interview"}
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
+  );
+}
+
+function InterviewCard({ interview, onEdit, onDelete, deleting }) {
+  return (
+    <article className="interview-card">
+      <div className="interview-card-heading">
+        <div>
+          <p className="interview-round">{interview.roundName}</p>
+          <p className="interview-type">{interviewTypeLabels[interview.type] || interview.type}</p>
+        </div>
+        <span className={`interview-status interview-status-${interview.status}`}>
+          {interviewStatusLabels[interview.status] || interview.status}
+        </span>
+      </div>
+      <div className="interview-meta">
+        <span>{formatDateTime(interview.scheduledAt)}</span>
+        {interview.durationMinutes !== null && interview.durationMinutes !== undefined && (
+          <span>{interview.durationMinutes} min</span>
+        )}
+        {interview.interviewerName && <span>{interview.interviewerName}</span>}
+      </div>
+      <div className="interview-details">
+        {interview.location && <span>{interview.location}</span>}
+        {interview.meetingUrl && (
+          <a href={interview.meetingUrl} target="_blank" rel="noreferrer">
+            Open meeting link
+          </a>
+        )}
+      </div>
+      {interview.notes && <p className="interview-notes">{interview.notes}</p>}
+      <div className="interview-actions">
+        <button className="text-button" type="button" onClick={() => onEdit(interview)}>
+          Edit
+        </button>
+        <button
+          className="text-button text-button-danger"
+          type="button"
+          onClick={() => onDelete(interview)}
+          disabled={deleting}
+        >
+          {deleting ? "Deleting..." : "Delete"}
+        </button>
+      </div>
+    </article>
+  );
+}
+
+function InterviewSection({ applicationId, onNotify }) {
+  const [interviews, setInterviews] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingInterview, setEditingInterview] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
+
+  const loadInterviews = useCallback(async () => {
+    setLoading(true);
+    setError("");
+
+    try {
+      setInterviews(await getInterviews(applicationId));
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [applicationId]);
+
+  useEffect(() => {
+    loadInterviews();
+  }, [loadInterviews]);
+
+  function openAddForm() {
+    setEditingInterview(null);
+    setFormOpen(true);
+  }
+
+  function openEditForm(interview) {
+    setEditingInterview(interview);
+    setFormOpen(true);
+  }
+
+  async function handleSave(interview) {
+    setSaving(true);
+    setError("");
+
+    try {
+      if (editingInterview) {
+        await updateInterview(editingInterview.id, interview);
+        onNotify("Interview updated successfully.");
+      } else {
+        await createInterview(applicationId, interview);
+        onNotify("Interview added successfully.");
+      }
+      setFormOpen(false);
+      setEditingInterview(null);
+      await loadInterviews();
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete(interview) {
+    if (!window.confirm(`Delete the ${interview.roundName} interview?`)) {
+      return;
+    }
+
+    setDeletingId(interview.id);
+    setError("");
+
+    try {
+      await deleteInterview(interview.id);
+      onNotify("Interview deleted successfully.");
+      await loadInterviews();
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  return (
+    <section className="interview-section" aria-label="Interviews">
+      <div className="interview-section-heading">
+        <div>
+          <h4>Interviews</h4>
+          <span>{loading ? "Loading..." : `${interviews.length} ${interviews.length === 1 ? "round" : "rounds"}`}</span>
+        </div>
+        <button className="interview-add-button" type="button" onClick={openAddForm}>
+          <span aria-hidden="true">+</span>
+          Add interview
+        </button>
+      </div>
+
+      {error && (
+        <div className="interview-error" role="alert">
+          <span>{error}</span>
+          <button className="text-button" type="button" onClick={loadInterviews}>
+            Retry
+          </button>
+        </div>
+      )}
+
+      {loading ? (
+        <p className="interview-empty">Loading interview rounds...</p>
+      ) : interviews.length === 0 ? (
+        <p className="interview-empty">No interview rounds recorded yet.</p>
+      ) : (
+        <div className="interview-list">
+          {interviews.map((interview) => (
+            <InterviewCard
+              key={interview.id}
+              interview={interview}
+              onEdit={openEditForm}
+              onDelete={handleDelete}
+              deleting={deletingId === interview.id}
+            />
+          ))}
+        </div>
+      )}
+
+      {formOpen && (
+        <InterviewForm
+          interview={editingInterview}
+          saving={saving}
+          onCancel={() => setFormOpen(false)}
+          onSubmit={handleSave}
+        />
+      )}
+    </section>
+  );
 }
 
 function ApplicationForm({ application, saving, onCancel, onSubmit }) {
@@ -164,7 +595,7 @@ function ApplicationForm({ application, saving, onCancel, onSubmit }) {
   );
 }
 
-function ApplicationCard({ application, onEdit, onDelete, deleting }) {
+function ApplicationCard({ application, onEdit, onDelete, deleting, onNotify }) {
   return (
     <article className="application-card">
       <div className="card-topline">
@@ -201,6 +632,8 @@ function ApplicationCard({ application, onEdit, onDelete, deleting }) {
           {deleting ? "Deleting..." : "Delete"}
         </button>
       </div>
+
+      <InterviewSection applicationId={application.id} onNotify={onNotify} />
     </article>
   );
 }
@@ -214,6 +647,7 @@ export default function App() {
   const [editingApplication, setEditingApplication] = useState(null);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
+  const [toast, setToast] = useState("");
 
   const loadApplications = useCallback(async () => {
     setLoading(true);
@@ -231,6 +665,11 @@ export default function App() {
   useEffect(() => {
     loadApplications();
   }, [loadApplications]);
+
+  function showToast(nextMessage) {
+    setToast(nextMessage);
+    window.setTimeout(() => setToast(""), 3200);
+  }
 
   function openAddForm() {
     setEditingApplication(null);
@@ -395,6 +834,7 @@ export default function App() {
                   onEdit={openEditForm}
                   onDelete={handleDelete}
                   deleting={deletingId === application.id}
+                  onNotify={showToast}
                 />
               ))}
             </div>
@@ -409,6 +849,12 @@ export default function App() {
           onCancel={() => setFormOpen(false)}
           onSubmit={handleSave}
         />
+      )}
+      {toast && (
+        <div className="toast" role="status">
+          <span aria-hidden="true">✓</span>
+          {toast}
+        </div>
       )}
     </div>
   );

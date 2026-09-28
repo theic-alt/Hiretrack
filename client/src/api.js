@@ -39,3 +39,27 @@ export function deleteApplication(id) {
     method: "DELETE",
   });
 }
+
+export function getInterviews(applicationId) {
+  return request(`/api/applications/${applicationId}/interviews`);
+}
+
+export function createInterview(applicationId, interview) {
+  return request(`/api/applications/${applicationId}/interviews`, {
+    method: "POST",
+    body: JSON.stringify(interview),
+  });
+}
+
+export function updateInterview(id, interview) {
+  return request(`/api/interviews/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(interview),
+  });
+}
+
+export function deleteInterview(id) {
+  return request(`/api/interviews/${id}`, {
+    method: "DELETE",
+  });
+}

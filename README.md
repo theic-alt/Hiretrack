@@ -44,3 +44,8 @@ The backend exposes:
 - `POST /api/applications`
 - `PATCH /api/applications/:id`
 - `DELETE /api/applications/:id`
+- `GET /api/applications/:applicationId/interviews`
+- `GET /api/interviews/:id`
+- `POST /api/applications/:applicationId/interviews`
+- `PATCH /api/interviews/:id`
+- `DELETE /api/interviews/:id`

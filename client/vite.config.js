@@ -7,6 +7,7 @@ export default defineConfig({
     host: true,
     port: 5000,
     strictPort: true,
+    allowedHosts: true,
     proxy: {
       "/api": {
         target: process.env.BACKEND_URL || "http://127.0.0.1:3001",
