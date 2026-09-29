@@ -1,0 +1,6 @@
+{
+  "name": "HireTrack",
+  "description": "Job application and interview tracking SaaS platform with AI-powered resume analysis.",
+  "requestFrame": "full",
+  "capabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -53,9 +53,13 @@ const upload = multer({
   },
 });
 
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
-});
+function getGenAI() {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error("GEMINI_API_KEY environment variable is not configured.");
+  }
+  return new GoogleGenAI({ apiKey });
+}
 
 const candidateSchema = {
   type: "object",
@@ -177,6 +181,7 @@ router.post("/analyze-resume", upload.single("resume"), async (req, res) => {
     }
 
     const pdfData = req.file.buffer.toString("base64");
+    const ai = getGenAI();
 
     const interaction = await ai.interactions.create({
       model: "gemini-3.8-flash",
@@ -258,6 +263,7 @@ router.get("/analyze-saved-resume/:id", async (req, res) => {
 
     const pdfBuffer = await fs.readFile(filePath);
     const pdfData = pdfBuffer.toString("base64");
+    const ai = getGenAI();
 
     const interaction = await ai.interactions.create({
       model: "gemini-3.8-flash",
@@ -296,75 +302,6 @@ router.get("/analyze-saved-resume/:id", async (req, res) => {
       error: "Unable to analyze the saved CV.",
       details:
         process.env.NODE_ENV === "development" ? error.message : undefined,
-    });
-  }
-});
-
-router.get("/test-jobs", async (req, res) => {
-  try {
-    const data = await searchAdzunaJobs({
-      what: "software engineering intern",
-      where: "Bengaluru",
-      resultsPerPage: 5,
-    });
-
-    return res.json({
-      success: true,
-      count: data.results?.length || 0,
-      jobs: data.results || [],
-    });
-  } catch (error) {
-    console.error("Adzuna test error:", error);
-
-    return res.status(500).json({
-      success: false,
-      error: error.message,
-    });
-  }
-});
-
-router.get("/test", async (req, res) => {
-  try {
-    const data = await searchAdzunaJobs({
-      what: "software engineering intern",
-      where: "Bengaluru",
-      resultsPerPage: 5,
-    });
-
-    return res.json({
-      success: true,
-      count: data.results?.length || 0,
-      jobs: data.results || [],
-    });
-  } catch (error) {
-    console.error("Adzuna test error:", error);
-
-    return res.status(500).json({
-      success: false,
-      error: error.message,
-    });
-  }
-});
-
-router.get("/test-jobs", async (req, res) => {
-  try {
-    const data = await searchAdzunaJobs({
-      what: "software engineering intern",
-      where: "Bengaluru",
-      resultsPerPage: 5,
-    });
-
-    return res.json({
-      success: true,
-      count: data.results?.length || 0,
-      jobs: data.results || [],
-    });
-  } catch (error) {
-    console.error("Adzuna test error:", error);
-
-    return res.status(500).json({
-      success: false,
-      error: error.message,
     });
   }
 });

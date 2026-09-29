@@ -196,29 +196,33 @@ async function touchApplication(query, applicationId) {
   );
 }
 
-function registerInterviewRoutes(app, { query, getDevelopmentUser }) {
-  app.get("/api/applications/:applicationId/interviews", async (request, response) => {
-    const applicationId = parsePositiveId(request.params.applicationId);
-    const userId = await getDevelopmentUser();
+function registerInterviewRoutes(app, { query, requireAuth }) {
+  app.get(
+    "/api/applications/:applicationId/interviews",
+    requireAuth,
+    async (request, response) => {
+      const applicationId = parsePositiveId(request.params.applicationId);
+      const userId = request.userId;
 
-    if (!applicationId || !(await applicationBelongsToUser(query, applicationId, userId))) {
-      return response.status(404).json({ error: "Application not found." });
-    }
+      if (!applicationId || !(await applicationBelongsToUser(query, applicationId, userId))) {
+        return response.status(404).json({ error: "Application not found." });
+      }
 
-    const result = await query(
-      `${interviewSelect}
-       FROM interviews i
-       WHERE i.application_id = $1
-       ORDER BY i.scheduled_at ASC NULLS LAST, i.updated_at DESC`,
-      [applicationId],
-    );
+      const result = await query(
+        `${interviewSelect}
+         FROM interviews i
+         WHERE i.application_id = $1
+         ORDER BY i.scheduled_at ASC NULLS LAST, i.updated_at DESC`,
+        [applicationId],
+      );
 
-    return response.json(result.rows.map(mapInterview));
-  });
+      return response.json(result.rows.map(mapInterview));
+    },
+  );
 
-  app.get("/api/interviews/:id", async (request, response) => {
+  app.get("/api/interviews/:id", requireAuth, async (request, response) => {
     const interviewId = parsePositiveId(request.params.id);
-    const userId = await getDevelopmentUser();
+    const userId = request.userId;
 
     if (!interviewId) {
       return response.status(404).json({ error: "Interview not found." });
@@ -232,48 +236,52 @@ function registerInterviewRoutes(app, { query, getDevelopmentUser }) {
     return response.json(mapInterview(interview));
   });
 
-  app.post("/api/applications/:applicationId/interviews", async (request, response) => {
-    const applicationId = parsePositiveId(request.params.applicationId);
-    const validation = validateInterviewInput(request.body);
+  app.post(
+    "/api/applications/:applicationId/interviews",
+    requireAuth,
+    async (request, response) => {
+      const applicationId = parsePositiveId(request.params.applicationId);
+      const validation = validateInterviewInput(request.body);
 
-    if (validation.error) {
-      return response.status(400).json({ error: validation.error });
-    }
+      if (validation.error) {
+        return response.status(400).json({ error: validation.error });
+      }
 
-    const userId = await getDevelopmentUser();
-    if (!applicationId || !(await applicationBelongsToUser(query, applicationId, userId))) {
-      return response.status(404).json({ error: "Application not found." });
-    }
+      const userId = request.userId;
+      if (!applicationId || !(await applicationBelongsToUser(query, applicationId, userId))) {
+        return response.status(404).json({ error: "Application not found." });
+      }
 
-    const interview = validation.value;
-    const result = await query(
-      `INSERT INTO interviews
-        (application_id, round_name, status, type, scheduled_at, duration_minutes,
-         location, meeting_url, interviewer_name, interviewer_email, notes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-       RETURNING id, application_id, round_name, status, type, scheduled_at,
-                 duration_minutes, location, meeting_url, interviewer_name,
-                 interviewer_email, notes, created_at, updated_at`,
-      [
-        applicationId,
-        interview.roundName,
-        interview.status,
-        interview.type,
-        interview.scheduledAt,
-        interview.durationMinutes,
-        interview.location,
-        interview.meetingUrl,
-        interview.interviewerName,
-        interview.interviewerEmail,
-        interview.notes,
-      ],
-    );
+      const interview = validation.value;
+      const result = await query(
+        `INSERT INTO interviews
+          (application_id, round_name, status, type, scheduled_at, duration_minutes,
+           location, meeting_url, interviewer_name, interviewer_email, notes)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+         RETURNING id, application_id, round_name, status, type, scheduled_at,
+                   duration_minutes, location, meeting_url, interviewer_name,
+                   interviewer_email, notes, created_at, updated_at`,
+        [
+          applicationId,
+          interview.roundName,
+          interview.status,
+          interview.type,
+          interview.scheduledAt,
+          interview.durationMinutes,
+          interview.location,
+          interview.meetingUrl,
+          interview.interviewerName,
+          interview.interviewerEmail,
+          interview.notes,
+        ],
+      );
 
-    await touchApplication(query, applicationId);
-    return response.status(201).json(mapInterview(result.rows[0]));
-  });
+      await touchApplication(query, applicationId);
+      return response.status(201).json(mapInterview(result.rows[0]));
+    },
+  );
 
-  app.patch("/api/interviews/:id", async (request, response) => {
+  app.patch("/api/interviews/:id", requireAuth, async (request, response) => {
     const interviewId = parsePositiveId(request.params.id);
     const validation = validateInterviewInput(request.body, { partial: true });
 
@@ -286,7 +294,7 @@ function registerInterviewRoutes(app, { query, getDevelopmentUser }) {
       return response.status(400).json({ error: "At least one field is required." });
     }
 
-    const userId = await getDevelopmentUser();
+    const userId = request.userId;
     if (!interviewId) {
       return response.status(404).json({ error: "Interview not found." });
     }
@@ -316,9 +324,9 @@ function registerInterviewRoutes(app, { query, getDevelopmentUser }) {
     return response.json(mapInterview(result.rows[0]));
   });
 
-  app.delete("/api/interviews/:id", async (request, response) => {
+  app.delete("/api/interviews/:id", requireAuth, async (request, response) => {
     const interviewId = parsePositiveId(request.params.id);
-    const userId = await getDevelopmentUser();
+    const userId = request.userId;
 
     if (!interviewId) {
       return response.status(404).json({ error: "Interview not found." });

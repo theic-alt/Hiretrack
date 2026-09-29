@@ -150,9 +150,9 @@ async function getResumeForUser(query, resumeId, userId) {
   return result.rows[0] || null;
 }
 
-function registerResumeRoutes(app, { query, getDevelopmentUser }) {
-  app.get("/api/resumes", async (_request, response) => {
-    const userId = await getDevelopmentUser();
+function registerResumeRoutes(app, { query, requireAuth }) {
+  app.get("/api/resumes", requireAuth, async (request, response) => {
+    const userId = request.userId;
     const result = await query(
       `${resumeSelect}
        FROM resumes
@@ -165,6 +165,7 @@ function registerResumeRoutes(app, { query, getDevelopmentUser }) {
 
   app.post(
     "/api/resumes",
+    requireAuth,
     (request, response, next) => {
       const contentType = request.headers["content-type"] || "";
       if (!contentType.toLowerCase().startsWith("multipart/form-data")) {
@@ -205,7 +206,7 @@ function registerResumeRoutes(app, { query, getDevelopmentUser }) {
         return response.status(400).json({ error: "The uploaded file is not a valid PDF." });
       }
 
-      const userId = await getDevelopmentUser();
+      const userId = request.userId;
       const existingCount = await query(
         "SELECT COUNT(*)::int AS count FROM resumes WHERE user_id = $1",
         [userId],
@@ -242,11 +243,12 @@ function registerResumeRoutes(app, { query, getDevelopmentUser }) {
     },
   );
 
-  app.patch("/api/resumes/:id", async (request, response) => {
+  app.patch("/api/resumes/:id", requireAuth, async (request, response) => {
     const resumeId = parsePositiveId(request.params.id);
     if (!resumeId) {
       return response.status(404).json({ error: "Resume not found." });
     }
+
     if (
       !request.body ||
       typeof request.body !== "object" ||
@@ -266,7 +268,7 @@ function registerResumeRoutes(app, { query, getDevelopmentUser }) {
       return response.status(400).json({ error: "At least one field is required." });
     }
 
-    const userId = await getDevelopmentUser();
+    const userId = request.userId;
     const existingResume = await getResumeForUser(query, resumeId, userId);
     if (!existingResume) {
       return response.status(404).json({ error: "Resume not found." });
@@ -307,13 +309,13 @@ function registerResumeRoutes(app, { query, getDevelopmentUser }) {
     return response.json(mapResume(result.rows[0]));
   });
 
-  app.delete("/api/resumes/:id", async (request, response) => {
+  app.delete("/api/resumes/:id", requireAuth, async (request, response) => {
     const resumeId = parsePositiveId(request.params.id);
     if (!resumeId) {
       return response.status(404).json({ error: "Resume not found." });
     }
 
-    const userId = await getDevelopmentUser();
+    const userId = request.userId;
     const existingResume = await getResumeForUser(query, resumeId, userId);
     if (!existingResume) {
       return response.status(404).json({ error: "Resume not found." });
@@ -331,13 +333,13 @@ function registerResumeRoutes(app, { query, getDevelopmentUser }) {
     return response.status(204).end();
   });
 
-  app.get("/api/resumes/:id/download", async (request, response, next) => {
+  app.get("/api/resumes/:id/download", requireAuth, async (request, response, next) => {
     const resumeId = parsePositiveId(request.params.id);
     if (!resumeId) {
       return response.status(404).json({ error: "Resume not found." });
     }
 
-    const userId = await getDevelopmentUser();
+    const userId = request.userId;
     const resume = await getResumeForUser(query, resumeId, userId);
     if (!resume) {
       return response.status(404).json({ error: "Resume not found." });

@@ -1,12 +1,37 @@
 const express = require("express");
-const { query } = require("./db");
+const fs = require("node:fs");
+const path = require("node:path");
+
+// Safely load environment variables from .env if present without overwriting existing process.env
+try {
+  const rootEnv = path.join(__dirname, "../.env");
+  if (fs.existsSync(rootEnv)) {
+    const content = fs.readFileSync(rootEnv, "utf8");
+    content.split("\n").forEach((line) => {
+      const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
+      if (match) {
+        const key = match[1];
+        let val = (match[2] || "").trim();
+        if (val.startsWith('"') && val.endsWith('"')) val = val.slice(1, -1);
+        if (val && !process.env[key]) {
+          process.env[key] = val;
+        }
+      }
+    });
+  }
+} catch (e) {
+  // Ignore
+}
+
+const { query, getDatabaseStatus } = require("./db");
+const { createRequireAuth, registerAuthRoutes } = require("./auth");
 const { registerInterviewRoutes } = require("./interview-routes");
 const { registerResumeRoutes } = require("./resume-routes");
+const { registerJobRoutes } = require("./job-routes");
 const aiJobsRouter = require("./ai-jobs");
 
 const app = express();
-const port = Number(process.env.PORT) || 3001;
-const developmentUserEmail = "development@hiretrack.local";
+const port = 3000;
 
 const applicationStatuses = [
   "saved",
@@ -32,25 +57,17 @@ const applicationColumns = {
 app.use(express.json());
 app.use("/api/ai", aiJobsRouter);
 
+// Register Auth Routes (/api/auth/signup, /api/auth/login, /api/auth/me, /api/auth/logout)
+const requireAuth = createRequireAuth(query);
+registerAuthRoutes(app, { query });
+
 app.get("/api/health", (_request, response) => {
-  response.json({ status: "ok" });
+  response.json({
+    status: "ok",
+    database: getDatabaseStatus(),
+    adzunaConfigured: Boolean(process.env.ADZUNA_APP_ID && process.env.ADZUNA_APP_KEY),
+  });
 });
-
-async function getDevelopmentUser() {
-  const result = await query("SELECT id FROM users WHERE email = $1", [
-    developmentUserEmail,
-  ]);
-
-  if (result.rows.length === 0) {
-    const error = new Error(
-      "Development user is missing. Run npm run db:setup.",
-    );
-    error.statusCode = 500;
-    throw error;
-  }
-
-  return result.rows[0].id;
-}
 
 async function resumeBelongsToUser(queryFunction, resumeId, userId) {
   const result = await queryFunction(
@@ -185,8 +202,8 @@ function validateApplicationInput(input, { partial = false } = {}) {
   return { value: normalized };
 }
 
-app.get("/api/applications", async (_request, response) => {
-  const userId = await getDevelopmentUser();
+app.get("/api/applications", requireAuth, async (request, response) => {
+  const userId = request.userId;
   const result = await query(
     `SELECT id, user_id, company_name, job_title, job_url, location, status,
             resume_id, applied_at, notes, created_at, updated_at
@@ -199,8 +216,8 @@ app.get("/api/applications", async (_request, response) => {
   response.json(result.rows.map(mapApplication));
 });
 
-app.get("/api/applications/:id", async (request, response) => {
-  const userId = await getDevelopmentUser();
+app.get("/api/applications/:id", requireAuth, async (request, response) => {
+  const userId = request.userId;
   const applicationId = Number(request.params.id);
 
   if (!Number.isInteger(applicationId) || applicationId < 1) {
@@ -222,13 +239,13 @@ app.get("/api/applications/:id", async (request, response) => {
   return response.json(mapApplication(result.rows[0]));
 });
 
-app.post("/api/applications", async (request, response) => {
+app.post("/api/applications", requireAuth, async (request, response) => {
   const validation = validateApplicationInput(request.body);
   if (validation.error) {
     return response.status(400).json({ error: validation.error });
   }
 
-  const userId = await getDevelopmentUser();
+  const userId = request.userId;
   const application = validation.value;
   if (
     application.resumeId !== null &&
@@ -258,7 +275,7 @@ app.post("/api/applications", async (request, response) => {
   return response.status(201).json(mapApplication(result.rows[0]));
 });
 
-app.patch("/api/applications/:id", async (request, response) => {
+app.patch("/api/applications/:id", requireAuth, async (request, response) => {
   const validation = validateApplicationInput(request.body, { partial: true });
   if (validation.error) {
     return response.status(400).json({ error: validation.error });
@@ -271,7 +288,7 @@ app.patch("/api/applications/:id", async (request, response) => {
       .json({ error: "At least one field is required." });
   }
 
-  const userId = await getDevelopmentUser();
+  const userId = request.userId;
   const applicationId = Number(request.params.id);
 
   if (!Number.isInteger(applicationId) || applicationId < 1) {
@@ -308,8 +325,8 @@ app.patch("/api/applications/:id", async (request, response) => {
   return response.json(mapApplication(result.rows[0]));
 });
 
-app.delete("/api/applications/:id", async (request, response) => {
-  const userId = await getDevelopmentUser();
+app.delete("/api/applications/:id", requireAuth, async (request, response) => {
+  const userId = request.userId;
   const applicationId = Number(request.params.id);
 
   if (!Number.isInteger(applicationId) || applicationId < 1) {
@@ -328,8 +345,25 @@ app.delete("/api/applications/:id", async (request, response) => {
   return response.status(204).end();
 });
 
-registerInterviewRoutes(app, { query, getDevelopmentUser });
-registerResumeRoutes(app, { query, getDevelopmentUser });
+registerInterviewRoutes(app, { query, requireAuth });
+registerResumeRoutes(app, { query, requireAuth });
+registerJobRoutes(app, { query, requireAuth });
+
+const clientDist = path.join(__dirname, "../client/dist");
+app.use(express.static(clientDist));
+
+app.use((req, res, next) => {
+  if (req.method !== "GET" && req.method !== "HEAD") {
+    return next();
+  }
+  if (req.path.startsWith("/api")) {
+    return next();
+  }
+  const indexPath = path.join(clientDist, "index.html");
+  res.sendFile(indexPath, (err) => {
+    if (err) next();
+  });
+});
 
 app.use((error, _request, response, _next) => {
   console.error(error);

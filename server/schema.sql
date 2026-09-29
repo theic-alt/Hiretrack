@@ -2,8 +2,11 @@ CREATE TABLE IF NOT EXISTS users (
   id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,
   email TEXT NOT NULL UNIQUE,
+  password_hash TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;
 
 CREATE TABLE IF NOT EXISTS job_applications (
   id SERIAL PRIMARY KEY,
@@ -69,3 +72,23 @@ CREATE INDEX IF NOT EXISTS resumes_user_updated_idx
 
 CREATE INDEX IF NOT EXISTS job_applications_resume_idx
   ON job_applications (resume_id);
+
+CREATE TABLE IF NOT EXISTS saved_jobs (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  external_id TEXT,
+  company_name TEXT NOT NULL,
+  job_title TEXT NOT NULL,
+  location TEXT,
+  salary_min NUMERIC,
+  salary_max NUMERIC,
+  job_url TEXT NOT NULL,
+  description TEXT,
+  skills TEXT,
+  match_percentage INTEGER,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT saved_jobs_user_url_unique UNIQUE (user_id, job_url)
+);
+
+CREATE INDEX IF NOT EXISTS saved_jobs_user_created_idx
+  ON saved_jobs (user_id, created_at DESC);
