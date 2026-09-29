@@ -211,25 +211,5 @@ router.get("/test", async (req, res) => {
     });
   }
 });
-router.get("/test", async (req, res) => {
-  try {
-    const interaction = await ai.interactions.create({
-      model: "gemini-3.8-flash",
-      input: "Reply with exactly: HireTrack Gemini connection successful",
-    });
-
-    res.json({
-      success: true,
-      message: interaction.output_text,
-    });
-  } catch (error) {
-    console.error("Gemini test error:", error);
-
-    res.status(500).json({
-      success: false,
-      error: error.message,
-    });
-  }
-});
 
 module.exports = router;
