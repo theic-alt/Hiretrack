@@ -2,6 +2,7 @@ const express = require("express");
 const { query } = require("./db");
 const { registerInterviewRoutes } = require("./interview-routes");
 const { registerResumeRoutes } = require("./resume-routes");
+const aiJobsRouter = require("./ai-jobs");
 
 const app = express();
 const port = Number(process.env.PORT) || 3001;
@@ -29,19 +30,21 @@ const applicationColumns = {
 };
 
 app.use(express.json());
+app.use("/api/ai", aiJobsRouter);
 
 app.get("/api/health", (_request, response) => {
   response.json({ status: "ok" });
 });
 
 async function getDevelopmentUser() {
-  const result = await query(
-    "SELECT id FROM users WHERE email = $1",
-    [developmentUserEmail],
-  );
+  const result = await query("SELECT id FROM users WHERE email = $1", [
+    developmentUserEmail,
+  ]);
 
   if (result.rows.length === 0) {
-    const error = new Error("Development user is missing. Run npm run db:setup.");
+    const error = new Error(
+      "Development user is missing. Run npm run db:setup.",
+    );
     error.statusCode = 500;
     throw error;
   }
@@ -97,7 +100,10 @@ function validateDate(value) {
   }
 
   const date = new Date(`${value}T00:00:00Z`);
-  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value) {
+  if (
+    Number.isNaN(date.getTime()) ||
+    date.toISOString().slice(0, 10) !== value
+  ) {
     return "Applied date must be a valid date.";
   }
 
@@ -153,7 +159,11 @@ function validateApplicationInput(input, { partial = false } = {}) {
   }
 
   if (!partial || Object.prototype.hasOwnProperty.call(input, "resumeId")) {
-    if (input.resumeId === undefined || input.resumeId === null || input.resumeId === "") {
+    if (
+      input.resumeId === undefined ||
+      input.resumeId === null ||
+      input.resumeId === ""
+    ) {
       normalized.resumeId = null;
     } else {
       const resumeId = Number(input.resumeId);
@@ -256,7 +266,9 @@ app.patch("/api/applications/:id", async (request, response) => {
 
   const fields = Object.entries(validation.value);
   if (fields.length === 0) {
-    return response.status(400).json({ error: "At least one field is required." });
+    return response
+      .status(400)
+      .json({ error: "At least one field is required." });
   }
 
   const userId = await getDevelopmentUser();
@@ -330,5 +342,7 @@ app.use((error, _request, response, _next) => {
 });
 
 app.listen(port, "0.0.0.0", () => {
-  console.log(`HireTrack API listening on port ${port}`);
+  console.log(`HireTrack API restarted - listening on port ${port}`);
 });
+
+// AI router restart check

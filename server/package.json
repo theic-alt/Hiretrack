@@ -5,11 +5,13 @@
   "type": "commonjs",
   "scripts": {
     "start": "node index.js",
-    "dev": "npm run db:setup && node index.js",
+    "dev": "npm run db:setup && node --watch index.js",
     "db:setup": "node setup-db.js"
   },
   "dependencies": {
+    "@google/genai": "^1.16.0",
     "express": "^5.1.0",
+    "multer": "^2.0.2",
     "pg": "^8.23.0"
   }
 }

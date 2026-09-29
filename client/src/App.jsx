@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   createApplication,
   deleteApplication,
@@ -411,6 +411,200 @@ function InterviewCard({ interview, onEdit, onDelete, deleting }) {
   );
 }
 
+function getInterviewTiming(scheduledAt) {
+  if (!scheduledAt) return "unscheduled";
+
+  const interviewDate = new Date(scheduledAt);
+  if (Number.isNaN(interviewDate.getTime())) return "unscheduled";
+
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const interviewDay = new Date(
+    interviewDate.getFullYear(),
+    interviewDate.getMonth(),
+    interviewDate.getDate(),
+  );
+
+  const diffDays = Math.round((interviewDay - today) / (1000 * 60 * 60 * 24));
+
+  if (diffDays < 0) return "overdue";
+  if (diffDays === 0) return "today";
+  if (diffDays === 1) return "tomorrow";
+  return "upcoming";
+}
+
+function getInterviewTimingLabel(timing) {
+  const labels = {
+    overdue: "Overdue",
+    today: "Today",
+    tomorrow: "Tomorrow",
+    upcoming: "Upcoming",
+    unscheduled: "No date",
+  };
+
+  return labels[timing] || timing;
+}
+
+function UpcomingInterviews({ applications }) {
+  const [interviews, setInterviews] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const loadUpcomingInterviews = useCallback(async () => {
+    if (!applications.length) {
+      setInterviews([]);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+
+    try {
+      const results = await Promise.all(
+        applications.map(async (application) => {
+          try {
+            const applicationInterviews = await getInterviews(application.id);
+
+            return applicationInterviews.map((interview) => ({
+              ...interview,
+              companyName: application.companyName,
+              jobTitle: application.jobTitle,
+              applicationId: application.id,
+            }));
+          } catch {
+            return [];
+          }
+        }),
+      );
+
+      const relevantInterviews = results
+        .flat()
+        .filter(
+          (interview) =>
+            interview.status === "scheduled" ||
+            interview.status === "rescheduled",
+        )
+        .filter((interview) => interview.scheduledAt)
+        .sort(
+          (a, b) =>
+            new Date(a.scheduledAt).getTime() -
+            new Date(b.scheduledAt).getTime(),
+        );
+
+      setInterviews(relevantInterviews);
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [applications]);
+
+  useEffect(() => {
+    loadUpcomingInterviews();
+  }, [loadUpcomingInterviews]);
+
+  return (
+    <section className="upcoming-interviews-section" id="interview-reminders">
+      <div className="section-heading">
+        <div>
+          <h2>Interview reminders</h2>
+          <p>Stay ahead of your upcoming interview rounds.</p>
+        </div>
+
+        <button
+          className="refresh-button"
+          type="button"
+          onClick={loadUpcomingInterviews}
+          disabled={loading}
+        >
+          <span aria-hidden="true">↻</span>
+          Refresh
+        </button>
+      </div>
+
+      {error && (
+        <div className="feedback feedback-error" role="alert">
+          <span>{error}</span>
+          <button
+            className="text-button"
+            type="button"
+            onClick={loadUpcomingInterviews}
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="upcoming-empty">
+          <div className="loading-spinner" />
+          <p>Checking your interviews...</p>
+        </div>
+      ) : interviews.length === 0 ? (
+        <div className="upcoming-empty">
+          <div className="empty-icon">✓</div>
+          <h3>No upcoming interviews</h3>
+          <p>Your scheduled interview rounds will appear here.</p>
+        </div>
+      ) : (
+        <div className="upcoming-interviews-list">
+          {interviews.map((interview) => {
+            const timing = getInterviewTiming(interview.scheduledAt);
+
+            return (
+              <article
+                className={`upcoming-interview-card upcoming-${timing}`}
+                key={interview.id}
+              >
+                <div className="upcoming-interview-main">
+                  <div>
+                    <div className="upcoming-interview-company">
+                      {interview.companyName}
+                    </div>
+                    <h3>{interview.jobTitle}</h3>
+                    <p className="upcoming-interview-round">
+                      {interview.roundName}
+                    </p>
+                  </div>
+
+                  <span className={`interview-reminder-badge ${timing}`}>
+                    {getInterviewTimingLabel(timing)}
+                  </span>
+                </div>
+
+                <div className="upcoming-interview-meta">
+                  <span>{formatDateTime(interview.scheduledAt)}</span>
+                  {interview.durationMinutes !== null &&
+                    interview.durationMinutes !== undefined && (
+                      <span>{interview.durationMinutes} min</span>
+                    )}
+                  {interview.interviewerName && (
+                    <span>{interview.interviewerName}</span>
+                  )}
+                </div>
+
+                {interview.meetingUrl && (
+                  <div className="upcoming-interview-actions">
+                    <a
+                      className="text-button"
+                      href={interview.meetingUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Open meeting
+                    </a>
+                  </div>
+                )}
+              </article>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
 function InterviewSection({ applicationId, onNotify }) {
   const [interviews, setInterviews] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -598,7 +792,9 @@ function ResumeForm({ resume, saving, onCancel, onSubmit }) {
       >
         <div className="modal-heading">
           <div>
-            <p className="eyebrow">{editing ? "Update resume" : "New resume"}</p>
+            <p className="eyebrow">
+              {editing ? "Update resume" : "New resume"}
+            </p>
             <h2 id="resume-form-title">
               {editing ? "Rename resume" : "Upload resume"}
             </h2>
@@ -665,13 +861,7 @@ function ResumeForm({ resume, saving, onCancel, onSubmit }) {
   );
 }
 
-function ResumeCard({
-  resume,
-  onEdit,
-  onSetDefault,
-  onDelete,
-  deleting,
-}) {
+function ResumeCard({ resume, onEdit, onSetDefault, onDelete, deleting }) {
   return (
     <article className="resume-card">
       <div className="resume-card-main">
@@ -705,7 +895,11 @@ function ResumeCard({
         >
           {resume.isDefault ? "Unset default" : "Set default"}
         </button>
-        <button className="text-button" type="button" onClick={() => onEdit(resume)}>
+        <button
+          className="text-button"
+          type="button"
+          onClick={() => onEdit(resume)}
+        >
           Rename
         </button>
         <button
@@ -721,13 +915,7 @@ function ResumeCard({
   );
 }
 
-function ResumeManager({
-  resumes,
-  loading,
-  error,
-  onReload,
-  onNotify,
-}) {
+function ResumeManager({ resumes, loading, error, onReload, onNotify }) {
   const [formOpen, setFormOpen] = useState(false);
   const [editingResume, setEditingResume] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -771,7 +959,9 @@ function ResumeManager({
     setActionError("");
     try {
       await updateResume(resume.id, { isDefault: !resume.isDefault });
-      onNotify(resume.isDefault ? "Default resume unset." : "Default resume updated.");
+      onNotify(
+        resume.isDefault ? "Default resume unset." : "Default resume updated.",
+      );
       await onReload();
     } catch (requestError) {
       setActionError(requestError.message);
@@ -798,7 +988,11 @@ function ResumeManager({
 
   const visibleError = actionError || error;
   return (
-    <section className="resumes-section" aria-labelledby="resumes-title">
+    <section
+      className="resumes-section"
+      id="resumes-section"
+      aria-labelledby="resumes-title"
+    >
       <div className="section-heading">
         <div>
           <h2 id="resumes-title">Resumes</h2>
@@ -833,7 +1027,11 @@ function ResumeManager({
           <div className="empty-icon">▤</div>
           <h3>No resumes uploaded yet</h3>
           <p>Upload a PDF to reuse it across your applications.</p>
-          <button className="button button-secondary" type="button" onClick={openUploadForm}>
+          <button
+            className="button button-secondary"
+            type="button"
+            onClick={openUploadForm}
+          >
             Upload your first resume
           </button>
         </div>
@@ -864,13 +1062,7 @@ function ResumeManager({
   );
 }
 
-function ApplicationForm({
-  application,
-  resumes,
-  saving,
-  onCancel,
-  onSubmit,
-}) {
+function ApplicationForm({ application, resumes, saving, onCancel, onSubmit }) {
   const [form, setForm] = useState(application || emptyForm);
 
   function handleChange(event) {
@@ -1100,6 +1292,11 @@ export default function App() {
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
   const [toast, setToast] = useState("");
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("updated");
 
   const loadApplications = useCallback(async () => {
     setLoading(true);
@@ -1232,20 +1429,175 @@ export default function App() {
   const countFor = (status) =>
     applications.filter((application) => application.status === status).length;
 
+  const filteredApplications = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+
+    const visible = applications.filter((application) => {
+      const matchesSearch =
+        !normalizedSearch ||
+        application.companyName?.toLowerCase().includes(normalizedSearch) ||
+        application.jobTitle?.toLowerCase().includes(normalizedSearch) ||
+        application.location?.toLowerCase().includes(normalizedSearch);
+
+      const matchesStatus =
+        statusFilter === "all" || application.status === statusFilter;
+
+      return matchesSearch && matchesStatus;
+    });
+
+    return [...visible].sort((a, b) => {
+      if (sortBy === "company") {
+        return (a.companyName || "").localeCompare(b.companyName || "");
+      }
+
+      if (sortBy === "applied") {
+        const aDate = a.appliedAt ? new Date(a.appliedAt).getTime() : 0;
+        const bDate = b.appliedAt ? new Date(b.appliedAt).getTime() : 0;
+        return bDate - aDate;
+      }
+
+      // Default: most recently updated first.
+      const aUpdated = a.updatedAt
+        ? new Date(a.updatedAt).getTime()
+        : a.createdAt
+          ? new Date(a.createdAt).getTime()
+          : 0;
+      const bUpdated = b.updatedAt
+        ? new Date(b.updatedAt).getTime()
+        : b.createdAt
+          ? new Date(b.createdAt).getTime()
+          : 0;
+
+      return bUpdated - aUpdated;
+    });
+  }, [applications, searchTerm, statusFilter, sortBy]);
+
+  const filteredCount = filteredApplications.length;
+
+  function closeMenu() {
+    setMenuOpen(false);
+  }
+
+  function scrollToSection(id) {
+    closeMenu();
+    window.requestAnimationFrame(() => {
+      document.getElementById(id)?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+  }
+
   return (
     <div className="app-shell">
       <header className="app-header">
-        <a className="brand" href="/">
-          <span className="brand-mark">H</span>
-          <span>HireTrack</span>
-        </a>
+        <div className="header-left">
+          <button
+            className={`menu-button${menuOpen ? " is-open" : ""}`}
+            type="button"
+            aria-label={
+              menuOpen ? "Close navigation menu" : "Open navigation menu"
+            }
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((current) => !current)}
+          >
+            <span />
+            <span />
+            <span />
+          </button>
+
+          <a className="brand" href="/" onClick={closeMenu}>
+            <span className="brand-mark">H</span>
+            <span>HireTrack</span>
+          </a>
+        </div>
+
         <div className="header-context">
           <span className="live-dot" />
           Personal workspace
         </div>
       </header>
 
-      <main className="dashboard">
+      {menuOpen && (
+        <>
+          <button
+            className="menu-backdrop"
+            type="button"
+            aria-label="Close navigation menu"
+            onClick={closeMenu}
+          />
+
+          <aside className="side-menu" aria-label="Main navigation">
+            <div className="side-menu-header">
+              <div>
+                <p className="eyebrow">HireTrack</p>
+                <h2>Workspace</h2>
+              </div>
+
+              <button
+                className="icon-button"
+                type="button"
+                aria-label="Close navigation menu"
+                onClick={closeMenu}
+              >
+                ×
+              </button>
+            </div>
+
+            <nav className="side-menu-nav">
+              <button
+                type="button"
+                onClick={() => scrollToSection("dashboard-top")}
+              >
+                <span className="menu-icon" aria-hidden="true">
+                  ⌂
+                </span>
+                Dashboard
+              </button>
+
+              <button
+                type="button"
+                onClick={() => scrollToSection("applications-section")}
+              >
+                <span className="menu-icon" aria-hidden="true">
+                  ▣
+                </span>
+                Applications
+              </button>
+
+              <button
+                type="button"
+                onClick={() => scrollToSection("interview-reminders")}
+              >
+                <span className="menu-icon" aria-hidden="true">
+                  ◷
+                </span>
+                Interviews
+              </button>
+
+              <button
+                type="button"
+                onClick={() => scrollToSection("resumes-section")}
+              >
+                <span className="menu-icon" aria-hidden="true">
+                  ▤
+                </span>
+                Resumes
+              </button>
+            </nav>
+
+            <div className="side-menu-footer">
+              <span className="live-dot" />
+              <div>
+                <strong>Personal workspace</strong>
+                <small>Your job search, organized.</small>
+              </div>
+            </div>
+          </aside>
+        </>
+      )}
+
+      <main className="dashboard" id="dashboard-top">
         <div className="dashboard-intro">
           <div>
             <p className="eyebrow">Your job search, organized</p>
@@ -1298,6 +1650,8 @@ export default function App() {
           onNotify={showToast}
         />
 
+        <UpcomingInterviews applications={applications} />
+
         {message && (
           <div className="feedback feedback-success" role="status">
             <span aria-hidden="true">✓</span>
@@ -1317,11 +1671,15 @@ export default function App() {
           </div>
         )}
 
-        <section className="applications-section">
+        <section className="applications-section" id="applications-section">
           <div className="section-heading">
             <div>
               <h2>All applications</h2>
-              <p>Most recently updated first</p>
+              <p>
+                {filteredCount === applications.length
+                  ? `${applications.length} ${applications.length === 1 ? "application" : "applications"}`
+                  : `Showing ${filteredCount} of ${applications.length} applications`}
+              </p>
             </div>
             <button
               className="refresh-button"
@@ -1332,6 +1690,59 @@ export default function App() {
               <span aria-hidden="true">↻</span>
               Refresh
             </button>
+          </div>
+
+          <div className="application-filters" aria-label="Application filters">
+            <label className="search-field">
+              <span>Search</span>
+              <input
+                type="search"
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Company, job title, location..."
+              />
+            </label>
+
+            <label className="filter-field">
+              <span>Status</span>
+              <select
+                value={statusFilter}
+                onChange={(event) => setStatusFilter(event.target.value)}
+              >
+                <option value="all">All statuses</option>
+                {statuses.map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="filter-field">
+              <span>Sort by</span>
+              <select
+                value={sortBy}
+                onChange={(event) => setSortBy(event.target.value)}
+              >
+                <option value="updated">Recently updated</option>
+                <option value="applied">Application date</option>
+                <option value="company">Company A–Z</option>
+              </select>
+            </label>
+
+            {(searchTerm || statusFilter !== "all" || sortBy !== "updated") && (
+              <button
+                className="text-button clear-filters-button"
+                type="button"
+                onClick={() => {
+                  setSearchTerm("");
+                  setStatusFilter("all");
+                  setSortBy("updated");
+                }}
+              >
+                Clear filters
+              </button>
+            )}
           </div>
 
           {loading ? (
@@ -1353,9 +1764,26 @@ export default function App() {
                 Add your first application
               </button>
             </div>
+          ) : filteredApplications.length === 0 ? (
+            <div className="empty-state">
+              <div className="empty-icon">⌕</div>
+              <h3>No applications found</h3>
+              <p>Try changing your search or filters.</p>
+              <button
+                className="button button-secondary"
+                type="button"
+                onClick={() => {
+                  setSearchTerm("");
+                  setStatusFilter("all");
+                  setSortBy("updated");
+                }}
+              >
+                Clear filters
+              </button>
+            </div>
           ) : (
             <div className="applications-list">
-              {applications.map((application) => (
+              {filteredApplications.map((application) => (
                 <ApplicationCard
                   key={application.id}
                   application={application}
