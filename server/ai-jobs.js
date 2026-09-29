@@ -7,6 +7,31 @@ const { GoogleGenAI } = require("@google/genai");
 
 const router = express.Router();
 
+const ADZUNA_BASE_URL = "https://api.adzuna.com/v1/api/jobs/in/search/1";
+
+async function searchAdzunaJobs({
+  what,
+  where = "Bengaluru",
+  resultsPerPage = 10,
+}) {
+  const params = new URLSearchParams({
+    app_id: process.env.ADZUNA_APP_ID,
+    app_key: process.env.ADZUNA_APP_KEY,
+    results_per_page: String(resultsPerPage),
+    what,
+    where,
+    content_type: "application/json",
+  });
+
+  const response = await fetch(`${ADZUNA_BASE_URL}?${params.toString()}`);
+
+  if (!response.ok) {
+    throw new Error(`Adzuna request failed with status ${response.status}.`);
+  }
+
+  return response.json();
+}
+
 router.get("/ping", (_req, res) => {
   res.json({
     success: true,
@@ -143,7 +168,6 @@ For targetRoles, infer reasonable job roles ONLY from the candidate's documented
 Return the candidate information using the provided JSON schema.
 `;
 
-// Analyze a newly uploaded PDF CV
 router.post("/analyze-resume", upload.single("resume"), async (req, res) => {
   try {
     if (!req.file) {
@@ -197,7 +221,6 @@ router.post("/analyze-resume", upload.single("resume"), async (req, res) => {
   }
 });
 
-// Analyze an already-saved HireTrack resume
 router.get("/analyze-saved-resume/:id", async (req, res) => {
   try {
     const resumeId = Number(req.params.id);
@@ -210,8 +233,8 @@ router.get("/analyze-saved-resume/:id", async (req, res) => {
 
     const result = await query(
       `SELECT id, file_path, original_filename, mime_type
-       FROM resumes
-       WHERE id = $1`,
+         FROM resumes
+         WHERE id = $1`,
       [resumeId],
     );
 
@@ -277,22 +300,69 @@ router.get("/analyze-saved-resume/:id", async (req, res) => {
   }
 });
 
-// Gemini connection test
-router.get("/test", async (req, res) => {
+router.get("/test-jobs", async (req, res) => {
   try {
-    const interaction = await ai.interactions.create({
-      model: "gemini-3.8-flash",
-      input: "Reply with exactly: HireTrack Gemini connection successful",
+    const data = await searchAdzunaJobs({
+      what: "software engineering intern",
+      where: "Bengaluru",
+      resultsPerPage: 5,
     });
 
-    res.json({
+    return res.json({
       success: true,
-      message: interaction.output_text,
+      count: data.results?.length || 0,
+      jobs: data.results || [],
     });
   } catch (error) {
-    console.error("Gemini test error:", error);
+    console.error("Adzuna test error:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+router.get("/test", async (req, res) => {
+  try {
+    const data = await searchAdzunaJobs({
+      what: "software engineering intern",
+      where: "Bengaluru",
+      resultsPerPage: 5,
+    });
+
+    return res.json({
+      success: true,
+      count: data.results?.length || 0,
+      jobs: data.results || [],
+    });
+  } catch (error) {
+    console.error("Adzuna test error:", error);
+
+    return res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+router.get("/test-jobs", async (req, res) => {
+  try {
+    const data = await searchAdzunaJobs({
+      what: "software engineering intern",
+      where: "Bengaluru",
+      resultsPerPage: 5,
+    });
+
+    return res.json({
+      success: true,
+      count: data.results?.length || 0,
+      jobs: data.results || [],
+    });
+  } catch (error) {
+    console.error("Adzuna test error:", error);
+
+    return res.status(500).json({
       success: false,
       error: error.message,
     });
