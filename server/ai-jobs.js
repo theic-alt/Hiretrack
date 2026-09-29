@@ -1,8 +1,12 @@
 const express = require("express");
 const multer = require("multer");
+const fs = require("node:fs/promises");
+const path = require("node:path");
+const { query } = require("./db");
 const { GoogleGenAI } = require("@google/genai");
 
 const router = express.Router();
+
 router.get("/ping", (_req, res) => {
   res.json({
     success: true,
@@ -117,17 +121,7 @@ const candidateSchema = {
   ],
 };
 
-router.post("/analyze-resume", upload.single("resume"), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({
-        error: "Please upload a PDF CV.",
-      });
-    }
-
-    const pdfData = req.file.buffer.toString("base64");
-
-    const prompt = `
+const resumeAnalysisPrompt = `
 Analyze this candidate's CV for a job recommendation system.
 
 Extract only information that is actually present in the CV.
@@ -149,6 +143,17 @@ For targetRoles, infer reasonable job roles ONLY from the candidate's documented
 Return the candidate information using the provided JSON schema.
 `;
 
+// Analyze a newly uploaded PDF CV
+router.post("/analyze-resume", upload.single("resume"), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        error: "Please upload a PDF CV.",
+      });
+    }
+
+    const pdfData = req.file.buffer.toString("base64");
+
     const interaction = await ai.interactions.create({
       model: "gemini-3.8-flash",
       input: [
@@ -159,7 +164,7 @@ Return the candidate information using the provided JSON schema.
         },
         {
           type: "text",
-          text: prompt,
+          text: resumeAnalysisPrompt,
         },
       ],
       response_format: {
@@ -191,6 +196,88 @@ Return the candidate information using the provided JSON schema.
     });
   }
 });
+
+// Analyze an already-saved HireTrack resume
+router.get("/analyze-saved-resume/:id", async (req, res) => {
+  try {
+    const resumeId = Number(req.params.id);
+
+    if (!Number.isInteger(resumeId) || resumeId <= 0) {
+      return res.status(400).json({
+        error: "Invalid resume ID.",
+      });
+    }
+
+    const result = await query(
+      `SELECT id, file_path, original_filename, mime_type
+       FROM resumes
+       WHERE id = $1`,
+      [resumeId],
+    );
+
+    const resume = result.rows[0];
+
+    if (!resume) {
+      return res.status(404).json({
+        error: "Resume not found.",
+      });
+    }
+
+    if (resume.mime_type !== "application/pdf") {
+      return res.status(400).json({
+        error: "Stored resume is not a PDF.",
+      });
+    }
+
+    const uploadDirectory = path.join(__dirname, "..", "uploads", "resumes");
+
+    const filePath = path.join(uploadDirectory, resume.file_path);
+
+    const pdfBuffer = await fs.readFile(filePath);
+    const pdfData = pdfBuffer.toString("base64");
+
+    const interaction = await ai.interactions.create({
+      model: "gemini-3.8-flash",
+      input: [
+        {
+          type: "document",
+          data: pdfData,
+          mime_type: "application/pdf",
+        },
+        {
+          type: "text",
+          text: resumeAnalysisPrompt,
+        },
+      ],
+      response_format: {
+        type: "text",
+        mime_type: "application/json",
+        schema: candidateSchema,
+      },
+    });
+
+    const candidateProfile = JSON.parse(interaction.output_text);
+
+    return res.json({
+      success: true,
+      resume: {
+        id: resume.id,
+        filename: resume.original_filename,
+      },
+      candidate: candidateProfile,
+    });
+  } catch (error) {
+    console.error("Saved resume analysis error:", error);
+
+    return res.status(500).json({
+      error: "Unable to analyze the saved CV.",
+      details:
+        process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+});
+
+// Gemini connection test
 router.get("/test", async (req, res) => {
   try {
     const interaction = await ai.interactions.create({
